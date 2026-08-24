@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}ET: {{ et.numero_pedido }}{% endblock %}
+
+{% block content %}
+<div class="main">
+    <!-- Encabezado de página -->
+    <div class="page-header">
+        <div>
+            <h2>📋 Especificación Técnica — Pedido N° {{ et.numero_pedido }}</h2>
+            <p>
+                {% if et.estado == 'FINALIZADA' %}
+                <span class="badge badge-success">Finalizada</span>
+                {% elif et.estado == 'ANULADA' %}
+                <span class="badge badge-danger">Anulada</span>
+                {% else %}
+                <span class="badge badge-draft">Borrador</span>
+                {% endif %}
+                — Creada por {{ et.creado_por_nombre }}
+            </p>
+        </div>
+        <div class="gap-row">
+            {% if et.estado == 'FINALIZADA' %}
+            <a href="{{ url_for('especificaciones.descargar_documento_et', id=et.id) }}"
+               class="btn btn-primary">
+                📥 Descargar Word
+            </a>
+            <a href="{{ url_for('fichas.pagina_nueva') }}?et_id={{ et.id }}"
+               class="btn btn-success">
+                ➕ Crear Ficha Técnica
+            </a>
+            {% elif et.estado == 'BORRADOR' %}
+            <a href="{{ url_for('especificaciones.pagina_editar', id=et.id) }}"
+               class="btn btn-primary">
+                ✏️ Editar Borrador
+            </a>
+            {% endif %}
+            <a href="{{ url_for('especificaciones.pagina_lista') }}" class="btn btn-secondary">
+                ← Volver
+            </a>
+        </div>
+    </div>
+
+    {% if et.estado == 'ANULADA' %}
+    <div class="alert alert-danger">
+        ⚠️ <strong>Especificación Técnica Anulada.</strong> Motivo: {{ et.motivo_anulacion or 'No especificado' }}
+    </div>
+    {% endif %}
+
+    <!-- Card 1: Datos del Pedido de Compra -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🛒 Datos del Pedido de Compra</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label class="form-label">Denominación de la Adquisición</label>
+                    <input type="text" class="form-control" value="{{ et.denominacion_adquisicion or '-' }}" readonly style="font-weight: 700;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Centro de Costo</label>
+                    <input type="text" class="form-control" value="{{ et.centro_costo_nombre or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Actividad Operativa</label>
+                    <input type="text" class="form-control"
+                           value="{% if et.actividad_codigo and et.actividad_nombre %}{{ et.actividad_codigo }} – {{ et.actividad_nombre }}{% elif et.actividad_codigo or et.actividad_nombre %}{{ et.actividad_codigo or '' }}{{ et.actividad_nombre or '' }}{% else %}-{% endif %}"
+                           readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pedido de Compra N°</label>
+                    <input type="text" class="form-control" value="{{ et.numero_pedido or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Meta – Año</label>
+                    <input type="text" class="form-control" value="{{ et.meta_anio or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha del Pedido</label>
+                    <input type="text" class="form-control"
+                           value="{{ et.fecha_pedido.strftime('%d/%m/%Y') if et.fecha_pedido else '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Año Fiscal</label>
+                    <input type="text" class="form-control" value="{{ et.anio_fiscal or '-' }}" readonly>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Proveedor</label>
+                    <input type="text" class="form-control"
+                           value="{% if et.razon_social %}{{ et.razon_social }} (RUC: {{ et.ruc }}){% else %}-{% endif %}" readonly>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: Finalidad Pública (auto-generated) -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🎯 Finalidad Pública</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group full-width">
+                <textarea class="form-control" readonly rows="3">{{ finalidad_auto or '-' }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3: Objetivo de la Contratación (auto-generated) -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📌 Objetivo de la Contratación</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group full-width">
+                <textarea class="form-control" readonly rows="3">{{ objetivo_auto or '-' }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: Ítems del Pedido -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📦 Ítems del Pedido ({{ items|length }})</h3>
+        </div>
+        <div class="card-body">
+            {% if items %}
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>N° Ítem</th>
+                            <th>Descripción</th>
+                            <th>Clasificador</th>
+                            <th>Unidad</th>
+                            <th>Cantidad</th>
+                            <th>Tipo de Bien</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ '%03d'|format(loop.index) }}</td>
+                            <td>{{ item.descripcion }}</td>
+                            <td><code>{{ item.clasificador or '-' }}</code></td>
+                            <td>{{ item.unidad_medida }}</td>
+                            <td>{{ item.cantidad }}</td>
+                            <td><strong>{{ item.tipo_bien_nombre }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Detalle técnico de cada ítem -->
+            <div class="items-list" style="margin-top: 1.5rem;">
+                {% for item in items %}
+                <div class="item-card">
+                    <div class="item-header">
+                        <h4>Ítem {{ '%03d'|format(loop.index) }}: {{ item.tipo_bien_nombre }} — {{ item.descripcion }}</h4>
+                        <span class="badge badge-draft">{{ item.cantidad }} {{ item.unidad_medida }}</span>
+                    </div>
+
+                    {% if item.condiciones_previas %}
+                    <div style="margin-bottom: 0.85rem;">
+                        <label class="form-label" style="font-weight: 700; color: var(--navy-900);">📋 Condiciones Previas:</label>
+                        <p class="text-sm" style="white-space: pre-line; margin-top: 0.25rem;">{{ item.condiciones_previas }}</p>
+                    </div>
+                    {% endif %}
+
+                    <div style="margin-bottom: 0.85rem;">
+                        <label class="form-label" style="font-weight: 700; color: var(--navy-900);">⚙️ Características Técnicas:</label>
+                        {% set chars = item.caracteristicas if item.caracteristicas is iterable and item.caracteristicas is not string else [] %}
+                        {% if chars %}
+                        <div class="char-list" style="margin-top: 0.25rem;">
+                            {% for c in chars %}
+                            <div class="char-row">
+                                <span class="char-name">{{ c.nombre }}:</span>
+                                <span class="char-value">{{ c.valor or c.valor_sugerido or '-' }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-sm" style="margin-top: 0.25rem;">Sin características registradas</p>
+                        {% endif %}
+                    </div>
+
+                    {% if item.imagen_referencial %}
+                    <div style="margin-bottom: 0.85rem;">
+                        <label class="form-label" style="font-weight: 700; color: var(--navy-900);">🖼️ Imagen Referencial:</label>
+                        <div style="margin-top: 0.25rem;">
+                            <img src="{{ url_for('static', filename=item.imagen_referencial) }}"
+                                 alt="Imagen referencial {{ item.tipo_bien_nombre }}"
+                                 style="max-width: 320px; max-height: 240px; border-radius: var(--radius-md); border: 1px solid var(--gray-200); object-fit: contain; background: #fff; padding: 4px;">
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if item.reglamentos_tecnicos %}
+                    <div>
+                        <label class="form-label" style="font-weight: 700; color: var(--navy-900);">📜 Reglamentos Técnicos / Normas:</label>
+                        <p class="text-sm" style="margin-top: 0.25rem;">{{ item.reglamentos_tecnicos }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="icon">📦</div>
+                <p>No hay ítems registrados en esta especificación técnica.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card 5: Auditoría -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🕐 Auditoría</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Creado por</label>
+                    <input type="text" class="form-control" value="{{ et.creado_por_nombre or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha de Creación</label>
+                    <input type="text" class="form-control"
+                           value="{{ et.fecha_creacion.strftime('%d/%m/%Y %H:%M') if et.fecha_creacion else '-' }}" readonly>
+                </div>
+                {% if et.finalizado_por_nombre %}
+                <div class="form-group">
+                    <label class="form-label">Finalizado por</label>
+                    <input type="text" class="form-control" value="{{ et.finalizado_por_nombre }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha de Finalización</label>
+                    <input type="text" class="form-control"
+                           value="{{ et.fecha_finalizacion.strftime('%d/%m/%Y %H:%M') if et.fecha_finalizacion else '-' }}" readonly>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

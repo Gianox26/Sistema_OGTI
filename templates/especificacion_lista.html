@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Especificaciones Técnicas{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>📋 Especificaciones Técnicas</h2>
+            <p>Listado de todas las especificaciones registradas</p>
+        </div>
+        <a href="{{ url_for('especificaciones.pagina_nueva') }}" class="btn btn-primary">
+            ➕ Nueva Especificación
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body" style="padding:0;">
+            {% if especificaciones %}
+            <div class="table-wrap" style="border:none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>N° Pedido</th>
+                            <th>Denominación</th>
+                            <th>Fecha</th>
+                            <th>Centro de Costo</th>
+                            <th>Ítems</th>
+                            <th>Creado por</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for et in especificaciones %}
+                        <tr>
+                            <td><strong>{{ et.numero_pedido }}</strong></td>
+                            <td>{{ et.denominacion_adquisicion|truncate(40) if et.denominacion_adquisicion else '-' }}</td>
+                            <td class="text-sm">{{ et.fecha_pedido.strftime('%d/%m/%Y') if et.fecha_pedido else '-' }}</td>
+                            <td>{{ et.centro_costo_nombre or '-' }}</td>
+                            <td>{{ et.total_items }}</td>
+                            <td class="text-sm text-muted">{{ et.creado_por_nombre }}</td>
+                            <td>
+                                {% if et.estado == 'FINALIZADA' %}
+                                <span class="badge badge-success">Finalizada</span>
+                                {% elif et.estado == 'ANULADA' %}
+                                <span class="badge badge-danger">Anulada</span>
+                                {% else %}
+                                <span class="badge badge-draft">Borrador</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('especificaciones.pagina_ver', id=et.id) }}"
+                                   class="btn btn-secondary btn-sm">Ver</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="icon">📋</div>
+                <p>No hay especificaciones técnicas registradas</p>
+                <a href="{{ url_for('especificaciones.pagina_nueva') }}" class="btn btn-primary mt-2">
+                    ➕ Nueva Especificación
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

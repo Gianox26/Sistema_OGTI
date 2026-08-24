@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Nueva Ficha Técnica{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>📄 Nueva Ficha Técnica</h2>
+            <p>Registre los datos del bien recibido, verifique el checklist y finalice</p>
+        </div>
+        <a href="{{ url_for('fichas.pagina_lista') }}" class="btn btn-secondary">
+            ← Volver al listado
+        </a>
+    </div>
+
+    <!-- Paso 1: Seleccionar ET e Ítem -->
+    <div class="card" id="paso-seleccion">
+        <div class="card-header">
+            <h3 class="card-title">1️⃣ Seleccionar Especificación Técnica y Bien</h3>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                ℹ️ Seleccione la Especificación Técnica del pedido correspondiente.
+                Los datos del proveedor y las características se cargarán automáticamente.
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Especificación Técnica <span class="req">*</span></label>
+                    <select id="et-selector" class="form-control" onchange="cargarItemsET()">
+                        <option value="">— Seleccione una ET finalizada —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ítem (Bien) <span class="req">*</span></label>
+                    <select id="item-selector" class="form-control" onchange="cargarDatosItem()">
+                        <option value="">— Primero seleccione una ET —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 2: Datos heredados (automáticos) -->
+    <div class="card hidden" id="paso-datos-heredados">
+        <div class="card-header">
+            <h3 class="card-title">📋 Datos Heredados de la Especificación</h3>
+            <span class="badge badge-success">Autocompletado</span>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">N° de Pedido</label>
+                    <input type="text" id="h-pedido" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha del Pedido</label>
+                    <input type="text" id="h-fecha" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Proveedor (RUC)</label>
+                    <input type="text" id="h-proveedor-ruc" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Razón Social</label>
+                    <input type="text" id="h-proveedor-razon" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Dirección del Proveedor</label>
+                    <input type="text" id="h-proveedor-dir" class="form-control">
+                    <span class="form-help">Editable si hubo cambio real</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono del Proveedor</label>
+                    <input type="text" id="h-proveedor-tel" class="form-control">
+                </div>
+            </div>
+
+            <!-- Características heredadas -->
+            <h4 style="margin-top:1.25rem; font-size:0.9rem;">⚙️ Características Técnicas Especificadas</h4>
+            <div id="h-caracteristicas" class="char-list mt-1">
+                <p class="text-muted text-sm">Se cargarán al seleccionar el ítem</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 3: Datos manuales del bien recibido -->
+    <div class="card hidden" id="paso-datos-manuales">
+        <div class="card-header">
+            <h3 class="card-title">🔧 Datos del Bien Recibido</h3>
+            <span class="badge badge-warning">Ingreso Manual</span>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Marca <span class="req">*</span></label>
+                    <input type="text" id="ft-marca" class="form-control"
+                           placeholder="Ej: ADVANCE">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modelo <span class="req">*</span></label>
+                    <input type="text" id="ft-modelo" class="form-control"
+                           placeholder="Ej: VISSION VM1470">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Color</label>
+                    <input type="text" id="ft-color" class="form-control"
+                           placeholder="Ej: NEGRO (ACABADO MATE)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">
+                        Número de Serie <span class="req">*</span>
+                    </label>
+                    <input type="text" id="ft-serie" class="form-control"
+                           placeholder="Ej: ADV1253S205126030423"
+                           oninput="validarSerieAjax()">
+                    <span id="serie-feedback" class="form-help"></span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado Físico <span class="req">*</span></label>
+                    <select id="ft-estado-fisico" class="form-control">
+                        <option value="">— Seleccione —</option>
+                        <option value="NUEVO">Nuevo</option>
+                        <option value="BUENO">Bueno</option>
+                        <option value="REGULAR">Regular</option>
+                        <option value="MALO">Malo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">N° Carta de Levantamiento</label>
+                    <input type="text" id="ft-carta" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Responsable</label>
+                    <div class="gap-row">
+                        <select id="ft-responsable" class="form-control flex-1">
+                            <option value="">— Seleccione —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalResponsable()">
+                            + Nuevo
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="ft-observaciones" class="form-control" rows="2"
+                              placeholder="Observaciones sobre el estado o condición del bien"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 4: Checklist de verificación -->
+    <div class="card hidden" id="paso-checklist">
+        <div class="card-header">
+            <h3 class="card-title">✅ Checklist de Verificación Obligatorio</h3>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning">
+                ⚠️ Marque cada casilla solo después de haber verificado físicamente el bien recibido.
+                El botón "Finalizar" se habilitará únicamente cuando las 6 casillas estén marcadas.
+            </div>
+            <div class="checklist">
+                <div class="checklist-title">🔍 Verificación de Coherencia</div>
+                <div class="checklist-grid">
+                    <div class="check-item" id="chk-marca-item" onclick="toggleCheck('marca_coincide')">
+                        <input type="checkbox" id="chk-marca_coincide" onchange="actualizarChecklist()">
+                        <label for="chk-marca_coincide">¿La marca coincide con la Especificación Técnica?</label>
+                    </div>
+                    <div class="check-item" id="chk-modelo-item" onclick="toggleCheck('modelo_coincide')">
+                        <input type="checkbox" id="chk-modelo_coincide" onchange="actualizarChecklist()">
+                        <label for="chk-modelo_coincide">¿El modelo coincide con la Especificación Técnica?</label>
+                    </div>
+                    <div class="check-item" id="chk-serie-item" onclick="toggleCheck('serie_ingresada')">
+                        <input type="checkbox" id="chk-serie_ingresada" onchange="actualizarChecklist()">
+                        <label for="chk-serie_ingresada">¿El número de serie fue ingresado?</label>
+                    </div>
+                    <div class="check-item" id="chk-estado-item" onclick="toggleCheck('estado_fisico_revisado')">
+                        <input type="checkbox" id="chk-estado_fisico_revisado" onchange="actualizarChecklist()">
+                        <label for="chk-estado_fisico_revisado">¿El estado físico fue revisado?</label>
+                    </div>
+                    <div class="check-item" id="chk-caract-item" onclick="toggleCheck('caracteristicas_verificadas')">
+                        <input type="checkbox" id="chk-caracteristicas_verificadas" onchange="actualizarChecklist()">
+                        <label for="chk-caracteristicas_verificadas">¿Las características técnicas fueron verificadas físicamente?</label>
+                    </div>
+                    <div class="check-item" id="chk-prov-item" onclick="toggleCheck('datos_proveedor_correctos')">
+                        <input type="checkbox" id="chk-datos_proveedor_correctos" onchange="actualizarChecklist()">
+                        <label for="chk-datos_proveedor_correctos">¿Los datos del proveedor son correctos?</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="hidden" id="paso-acciones" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1rem;">
+        <button type="button" class="btn btn-primary" id="btn-guardar-ft" onclick="guardarFicha()">
+            💾 Guardar Borrador
+        </button>
+        <button type="button" class="btn btn-success" id="btn-finalizar-ft" onclick="finalizarFicha()" disabled>
+            🔒 Finalizar Ficha Técnica
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Nuevo Responsable -->
+<div class="modal-overlay" id="modal-responsable">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Registrar Nuevo Responsable</h3>
+            <button class="modal-close" onclick="cerrarModal('modal-responsable')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Nombre <span class="req">*</span></label>
+                    <input type="text" id="resp-nombre" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cargo</label>
+                    <input type="text" id="resp-cargo" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" id="resp-telefono" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Correo</label>
+                    <input type="email" id="resp-correo" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Dependencia</label>
+                    <select id="resp-dependencia" class="form-control">
+                        <option value="">— Seleccione —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modal-responsable')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarResponsable()">Guardar Responsable</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/ficha.js') }}"></script>
+{% endblock %}

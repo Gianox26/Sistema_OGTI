@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Actividades Operativas{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>⚙️ Actividades Operativas</h2>
+        <p>Catálogo de actividades operativas con código y descripción</p>
+    </div>
+    <button class="btn btn-primary" onclick="abrirModal()">➕ Nueva Actividad</button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div id="tabla-container">
+            <div class="empty-state">
+                <div class="icon">⏳</div>
+                <p>Cargando...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Nueva Actividad -->
+<div class="modal-overlay" id="modal-form">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Nueva Actividad Operativa</h3>
+            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Código <span class="req">*</span></label>
+                <input type="text" class="form-control" id="f-codigo" placeholder="Ej: C0023" maxlength="20" style="text-transform:uppercase;">
+            </div>
+            <div class="form-group full-width">
+                <label class="form-label">Nombre / Descripción <span class="req">*</span></label>
+                <textarea class="form-control" id="f-nombre" rows="3" placeholder="Ej: Ejecución de soporte técnico y mantenimiento en equipos de la MPSR-J"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardar()">💾 Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const CATALOGO_TIPO = 'actividades-operativas';
+
+function cargarCatalogo() {
+    fetch('/api/actividades-operativas')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('tabla-container');
+            if (data.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">📁</div><p>No hay actividades registradas</p></div>';
+                return;
+            }
+            let html = '<div class="table-wrap" style="border:none;"><table class="table"><thead><tr>';
+            html += '<th>Código</th><th>Nombre / Descripción</th>';
+            html += '</tr></thead><tbody>';
+            data.forEach(a => {
+                html += '<tr>';
+                html += '<td><code>' + a.codigo + '</code></td>';
+                html += '<td>' + a.nombre + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        });
+}
+
+function abrirModal() { document.getElementById('modal-form').classList.add('show'); }
+function cerrarModal() { document.getElementById('modal-form').classList.remove('show'); }
+
+function guardar() {
+    const body = {
+        codigo: document.getElementById('f-codigo').value.trim(),
+        nombre: document.getElementById('f-nombre').value.trim(),
+    };
+    if (!body.codigo || !body.nombre) { alert('Código y nombre son obligatorios'); return; }
+
+    fetch('/api/actividades-operativas', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    })
+    .then(r => r.json().then(data => ({status: r.status, data})))
+    .then(({status, data}) => {
+        if (status >= 400) { alert(data.error || 'Error'); return; }
+        cerrarModal();
+        cargarCatalogo();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', cargarCatalogo);
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Catálogo de Proveedores{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>🏢 Catálogo de Proveedores</h2>
+            <p>Proveedores registrados para las especificaciones técnicas</p>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModal()">➕ Nuevo Proveedor</button>
+    </div>
+
+    <!-- Sub-navegación de catálogos -->
+    <div class="tabs">
+        <a href="{{ url_for('catalogos.pagina_proveedores') }}" class="tab-btn active">Proveedores</a>
+        <a href="{{ url_for('catalogos.pagina_responsables') }}" class="tab-btn">Responsables</a>
+        <a href="{{ url_for('catalogos.pagina_dependencias') }}" class="tab-btn">Dependencias</a>
+        <a href="{{ url_for('catalogos.pagina_tipos_bien') }}" class="tab-btn">Tipos de Bien</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body" style="padding:0;">
+            <div id="tabla-container">
+                <div class="empty-state">
+                    <div class="icon">⏳</div>
+                    <p>Cargando proveedores...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-form">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Registrar Proveedor</h3>
+            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">RUC <span class="req">*</span></label>
+                    <input type="text" id="f-ruc" class="form-control" maxlength="11">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Razón Social <span class="req">*</span></label>
+                    <input type="text" id="f-razon" class="form-control">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Dirección</label>
+                    <input type="text" id="f-direccion" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" id="f-telefono" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Correo</label>
+                    <input type="email" id="f-correo" class="form-control">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardar()">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/catalogos.js') }}"></script>
+<script>
+    const CATALOGO_TIPO = 'proveedores';
+    cargarCatalogo();
+</script>
+{% endblock %}

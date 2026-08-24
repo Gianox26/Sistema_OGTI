@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Catálogo de Dependencias{% endblock %}
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>🏢 Catálogo de Dependencias</h2>
+            <p>Oficinas y áreas de la Municipalidad</p>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModal()">➕ Nueva Dependencia</button>
+    </div>
+    <div class="tabs">
+        <a href="{{ url_for('catalogos.pagina_proveedores') }}" class="tab-btn">Proveedores</a>
+        <a href="{{ url_for('catalogos.pagina_responsables') }}" class="tab-btn">Responsables</a>
+        <a href="{{ url_for('catalogos.pagina_dependencias') }}" class="tab-btn active">Dependencias</a>
+        <a href="{{ url_for('catalogos.pagina_tipos_bien') }}" class="tab-btn">Tipos de Bien</a>
+    </div>
+    <div class="card">
+        <div class="card-body" style="padding:0;">
+            <div id="tabla-container">
+                <div class="empty-state"><div class="icon">⏳</div><p>Cargando...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-form">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Registrar Dependencia</h3>
+            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Nombre <span class="req">*</span></label>
+                    <input type="text" id="f-nombre" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Edificio</label>
+                    <input type="text" id="f-edificio" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pabellón</label>
+                    <input type="text" id="f-pabellon" class="form-control">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardar()">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/catalogos.js') }}"></script>
+<script>const CATALOGO_TIPO = 'dependencias'; cargarCatalogo();</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Catálogo de Tipos de Bien{% endblock %}
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>💻 Catálogo de Tipos de Bien</h2>
+            <p>Bienes tecnológicos con sus características técnicas típicas</p>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModal()">➕ Nuevo Tipo de Bien</button>
+    </div>
+    <div class="tabs">
+        <a href="{{ url_for('catalogos.pagina_proveedores') }}" class="tab-btn">Proveedores</a>
+        <a href="{{ url_for('catalogos.pagina_responsables') }}" class="tab-btn">Responsables</a>
+        <a href="{{ url_for('catalogos.pagina_dependencias') }}" class="tab-btn">Dependencias</a>
+        <a href="{{ url_for('catalogos.pagina_tipos_bien') }}" class="tab-btn active">Tipos de Bien</a>
+    </div>
+    <div class="card">
+        <div class="card-body" style="padding:0;">
+            <div id="tabla-container">
+                <div class="empty-state"><div class="icon">⏳</div><p>Cargando...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-form">
+    <div class="modal" style="max-width:700px;">
+        <div class="modal-header">
+            <h3>Registrar Tipo de Bien</h3>
+            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group mb-2">
+                <label class="form-label">Nombre <span class="req">*</span></label>
+                <input type="text" id="f-nombre" class="form-control" placeholder="Ej: Laptop">
+            </div>
+            <h4 style="font-size:0.9rem; margin-bottom:0.5rem;">Características Típicas</h4>
+            <div id="chars-container"></div>
+            <button class="btn btn-secondary btn-sm mt-1" onclick="agregarChar()">+ Agregar Característica</button>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardar()">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/catalogos.js') }}"></script>
+<script>const CATALOGO_TIPO = 'tipos-bien'; cargarCatalogo();</script>
+{% endblock %}

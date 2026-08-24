@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}FT: {{ ft.numero_correlativo }}-{{ ft.anio }} {% if ft.numero_correlativo %}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>📄 Ficha Técnica
+                {% if ft.numero_correlativo %}
+                — {{ ft.numero_correlativo }}-{{ ft.anio }}
+                {% else %}
+                — Borrador
+                {% endif %}
+            </h2>
+            <p>
+                {% if ft.estado == 'FINALIZADA' %}
+                <span class="badge badge-success">Finalizada</span>
+                {% elif ft.estado == 'ANULADA' %}
+                <span class="badge badge-danger">Anulada</span>
+                {% else %}
+                <span class="badge badge-draft">Borrador</span>
+                {% endif %}
+                — {{ ft.bien_descripcion }}
+            </p>
+        </div>
+        <div class="gap-row">
+            {% if ft.estado == 'FINALIZADA' %}
+            <a href="{{ url_for('fichas.descargar_documento_ft', id=ft.id) }}"
+               class="btn btn-primary">
+                📥 Descargar Word
+            </a>
+            {% endif %}
+            <a href="{{ url_for('fichas.pagina_lista') }}" class="btn btn-secondary">
+                ← Volver
+            </a>
+        </div>
+    </div>
+
+    {% if ft.estado == 'ANULADA' %}
+    <div class="alert alert-danger">
+        ⚠️ <strong>Ficha Anulada.</strong> Motivo: {{ ft.motivo_anulacion or 'No especificado' }}
+    </div>
+    {% endif %}
+
+    <!-- Datos del Bien -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🔧 Datos del Bien</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Tipo de Bien</label>
+                    <input type="text" class="form-control" value="{{ ft.tipo_bien_nombre }}" readonly>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Descripción</label>
+                    <input type="text" class="form-control" value="{{ ft.bien_descripcion }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Marca</label>
+                    <input type="text" class="form-control" value="{{ ft.marca or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <input type="text" class="form-control" value="{{ ft.modelo or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Color</label>
+                    <input type="text" class="form-control" value="{{ ft.color or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Número de Serie</label>
+                    <input type="text" class="form-control" value="{{ ft.numero_serie }}" readonly
+                           style="font-weight:700; font-family:monospace;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado Físico</label>
+                    <input type="text" class="form-control" value="{{ ft.estado_fisico or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">N° Carta de Levantamiento</label>
+                    <input type="text" class="form-control" value="{{ ft.carta_levantamiento or '-' }}" readonly>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-control" readonly>{{ ft.observaciones or '-' }}</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Características Verificadas -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">⚙️ Características Técnicas Verificadas</h3>
+        </div>
+        <div class="card-body">
+            {% set chars = ft.caracteristicas_verificadas if ft.caracteristicas_verificadas is iterable and ft.caracteristicas_verificadas is not string else [] %}
+            {% if chars %}
+            <div class="char-list">
+                {% for c in chars %}
+                <div class="char-row">
+                    <span class="char-name">{{ c.nombre }}:</span>
+                    <span class="char-value">{{ c.valor or c.valor_sugerido or '-' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted text-sm">Sin características registradas</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Datos del Proveedor -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🏢 Datos del Proveedor</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">RUC</label>
+                    <input type="text" class="form-control" value="{{ ft.proveedor_ruc or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Razón Social</label>
+                    <input type="text" class="form-control" value="{{ ft.proveedor_razon or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Dirección</label>
+                    <input type="text" class="form-control" value="{{ ft.proveedor_direccion or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" value="{{ ft.proveedor_telefono or '-' }}" readonly>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Responsable -->
+    {% if ft.responsable_nombre %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">👤 Responsable</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" class="form-control" value="{{ ft.responsable_nombre }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cargo</label>
+                    <input type="text" class="form-control" value="{{ ft.responsable_cargo or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Dependencia</label>
+                    <input type="text" class="form-control" value="{{ ft.dependencia_nombre or '-' }}" readonly>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Checklist -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">✅ Checklist de Verificación</h3>
+        </div>
+        <div class="card-body">
+            {% set cl = ft.checklist if ft.checklist is mapping else {} %}
+            <div class="checklist-grid">
+                <div class="check-item {{ 'checked' if cl.get('marca_coincide') }}">
+                    <input type="checkbox" {{ 'checked' if cl.get('marca_coincide') }} disabled>
+                    <label>¿La marca coincide con la ET?</label>
+                </div>
+                <div class="check-item {{ 'checked' if cl.get('modelo_coincide') }}">
+                    <input type="checkbox" {{ 'checked' if cl.get('modelo_coincide') }} disabled>
+                    <label>¿El modelo coincide con la ET?</label>
+                </div>
+                <div class="check-item {{ 'checked' if cl.get('serie_ingresada') }}">
+                    <input type="checkbox" {{ 'checked' if cl.get('serie_ingresada') }} disabled>
+                    <label>¿El número de serie fue ingresado?</label>
+                </div>
+                <div class="check-item {{ 'checked' if cl.get('estado_fisico_revisado') }}">
+                    <input type="checkbox" {{ 'checked' if cl.get('estado_fisico_revisado') }} disabled>
+                    <label>¿El estado físico fue revisado?</label>
+                </div>
+                <div class="check-item {{ 'checked' if cl.get('caracteristicas_verificadas') }}">
+                    <input type="checkbox" {{ 'checked' if cl.get('caracteristicas_verificadas') }} disabled>
+                    <label>¿Las características fueron verificadas?</label>
+                </div>
+                <div class="check-item {{ 'checked' if cl.get('datos_proveedor_correctos') }}">
+                    <input type="checkbox" {{ 'checked' if cl.get('datos_proveedor_correctos') }} disabled>
+                    <label>¿Los datos del proveedor son correctos?</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auditoría -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🕐 Auditoría</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">N° Pedido (ET)</label>
+                    <input type="text" class="form-control" value="{{ ft.numero_pedido }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Creado por</label>
+                    <input type="text" class="form-control" value="{{ ft.creado_por_nombre }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha de Creación</label>
+                    <input type="text" class="form-control"
+                           value="{{ ft.fecha_creacion.strftime('%d/%m/%Y %H:%M') if ft.fecha_creacion else '-' }}" readonly>
+                </div>
+                {% if ft.finalizado_por_nombre %}
+                <div class="form-group">
+                    <label class="form-label">Finalizado por</label>
+                    <input type="text" class="form-control" value="{{ ft.finalizado_por_nombre }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha de Finalización</label>
+                    <input type="text" class="form-control"
+                           value="{{ ft.fecha_finalizacion.strftime('%d/%m/%Y %H:%M') if ft.fecha_finalizacion else '-' }}" readonly>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

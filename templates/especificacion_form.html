@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}Nueva Especificación Técnica{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>📋 Nueva Especificación Técnica</h2>
+            <p>Registre los datos del pedido de compra y agregue los bienes solicitados</p>
+        </div>
+        <a href="{{ url_for('especificaciones.pagina_lista') }}" class="btn btn-secondary">
+            ← Volver al listado
+        </a>
+    </div>
+
+    <!-- Card 1: Datos del Pedido de Compra (tabla superior del formato oficial) -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📝 Datos del Pedido de Compra</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <!-- 1. Centro de Costo -->
+                <div class="form-group">
+                    <label class="form-label" for="centro_costo_id">Centro de Costo</label>
+                    <div class="gap-row">
+                        <select id="centro_costo_id" class="form-control flex-1">
+                            <option value="">— Seleccione un centro de costo —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalDependencia()">
+                            + Nuevo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. Actividad Operativa -->
+                <div class="form-group">
+                    <label class="form-label" for="actividad_operativa_id">Actividad Operativa</label>
+                    <div class="gap-row">
+                        <select id="actividad_operativa_id" class="form-control flex-1">
+                            <option value="">— Seleccione una actividad operativa —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalActividad()">
+                            + Nuevo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Denominación de la Adquisición (Full Width) -->
+                <div class="form-group full-width">
+                    <label class="form-label" for="denominacion_adquisicion">
+                        Denominación de la Adquisición <span class="req">*</span>
+                    </label>
+                    <input type="text" id="denominacion_adquisicion" class="form-control"
+                           placeholder="Ej: ADQUISICIÓN DE ALICATE CRIMPING" required>
+                </div>
+
+                <!-- 4. Pedido de Compra N° -->
+                <div class="form-group">
+                    <label class="form-label" for="numero_pedido">
+                        Pedido de Compra N° <span class="req">*</span>
+                    </label>
+                    <input type="text" id="numero_pedido" class="form-control"
+                           placeholder="Ej: 002425" required>
+                    <span class="form-help">Solo dígitos</span>
+                </div>
+
+                <!-- 5. Meta – Año -->
+                <div class="form-group">
+                    <label class="form-label">Meta – Año</label>
+                    <div class="gap-row">
+                        <input type="text" id="meta_codigo" class="form-control"
+                               placeholder="0039" maxlength="4" style="max-width: 120px;">
+                        <span style="color: var(--gray-400); font-weight: bold;">–</span>
+                        <input type="number" id="anio_fiscal" class="form-control flex-1"
+                               value="2026" min="2020" max="2099">
+                    </div>
+                </div>
+
+                <!-- 6. Fecha del Pedido -->
+                <div class="form-group">
+                    <label class="form-label" for="fecha_pedido">
+                        Fecha del Pedido <span class="req">*</span>
+                    </label>
+                    <input type="date" id="fecha_pedido" class="form-control" required>
+                </div>
+
+                <!-- 7. Proveedor -->
+                <div class="form-group">
+                    <label class="form-label" for="proveedor_id">
+                        Proveedor <span class="req">*</span>
+                    </label>
+                    <div class="gap-row">
+                        <select id="proveedor_id" class="form-control flex-1" required>
+                            <option value="">— Seleccione un proveedor —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalProveedor()">
+                            + Nuevo
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1.25rem; text-align: right;">
+                <button type="button" class="btn btn-primary" id="btn-guardar-et" onclick="guardarET()">
+                    💾 Guardar Especificación
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: Ítems del Pedido (hidden initially) -->
+    <div id="seccion-items" class="hidden">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📦 Ítems del Pedido</h3>
+                <button type="button" class="btn btn-primary btn-sm" onclick="abrirModalItem()">
+                    ➕ Agregar Ítem
+                </button>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <div id="items-container">
+                    <div class="empty-state">
+                        <div class="icon">📦</div>
+                        <p>Agregue los bienes que forman parte del pedido</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón Finalizar -->
+        <div style="text-align: right; margin-top: 1rem;">
+            <button type="button" class="btn btn-success" id="btn-finalizar-et" onclick="finalizarET()">
+                ✅ Finalizar Especificación Técnica
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Nuevo Proveedor -->
+<div class="modal-overlay" id="modal-proveedor">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>🏢 Registrar Nuevo Proveedor</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modal-proveedor')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="prov-ruc">RUC <span class="req">*</span></label>
+                    <input type="text" id="prov-ruc" class="form-control" maxlength="11"
+                           placeholder="11 dígitos">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="prov-razon">Razón Social <span class="req">*</span></label>
+                    <input type="text" id="prov-razon" class="form-control"
+                           placeholder="Ej: CORPORACIÓN TECNOLÓGICA S.A.C.">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label" for="prov-direccion">Dirección</label>
+                    <input type="text" id="prov-direccion" class="form-control"
+                           placeholder="Ej: Jr. San Román 123, Juliaca">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="prov-telefono">Teléfono</label>
+                    <input type="text" id="prov-telefono" class="form-control"
+                           placeholder="Ej: 951234567">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="prov-correo">Correo</label>
+                    <input type="email" id="prov-correo" class="form-control"
+                           placeholder="proveedor@ejemplo.com">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-proveedor')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarProveedor()">Guardar Proveedor</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Nueva Dependencia -->
+<div class="modal-overlay" id="modal-dependencia">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>🏢 Registrar Nueva Dependencia</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modal-dependencia')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label class="form-label" for="dep-nombre">Nombre <span class="req">*</span></label>
+                    <input type="text" id="dep-nombre" class="form-control"
+                           placeholder="Ej: Subgerencia de Logística y Abastecimiento">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="dep-edificio">Edificio</label>
+                    <input type="text" id="dep-edificio" class="form-control"
+                           placeholder="Ej: Palacio Municipal">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="dep-pabellon">Pabellón</label>
+                    <input type="text" id="dep-pabellon" class="form-control"
+                           placeholder="Ej: Pabellón B, 2do Piso">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-dependencia')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarDependencia()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Nueva Actividad Operativa -->
+<div class="modal-overlay" id="modal-actividad">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>📑 Registrar Nueva Actividad Operativa</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modal-actividad')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="act-codigo">Código <span class="req">*</span></label>
+                    <input type="text" id="act-codigo" class="form-control"
+                           placeholder="Ej: C0023">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label" for="act-nombre">Nombre / Descripción <span class="req">*</span></label>
+                    <textarea id="act-nombre" class="form-control" rows="3"
+                              placeholder="Ej: GESTIÓN Y ADMINISTRACIÓN DE INFRAESTRUCTURA DE REDES Y TELECOMUNICACIONES"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-actividad')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarActividad()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Agregar Ítem -->
+<div class="modal-overlay" id="modal-item">
+    <div class="modal" style="max-width: 800px;">
+        <div class="modal-header">
+            <h3>📦 Agregar Ítem al Pedido</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modal-item')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <!-- Tipo de Bien -->
+                <div class="form-group">
+                    <label class="form-label" for="item-tipo-bien">Tipo de Bien <span class="req">*</span></label>
+                    <select id="item-tipo-bien" class="form-control" onchange="cargarCaracteristicas()">
+                        <option value="">— Seleccione —</option>
+                    </select>
+                </div>
+
+                <!-- Clasificador -->
+                <div class="form-group">
+                    <label class="form-label" for="item-clasificador">Clasificador</label>
+                    <input type="text" id="item-clasificador" class="form-control"
+                           placeholder="Ej: 2.6.3.2.2.1">
+                </div>
+
+                <!-- Descripción -->
+                <div class="form-group full-width">
+                    <label class="form-label" for="item-descripcion">Descripción <span class="req">*</span></label>
+                    <textarea id="item-descripcion" class="form-control" rows="2"
+                              placeholder="Descripción completa del bien"></textarea>
+                </div>
+
+                <!-- Unidad de Medida -->
+                <div class="form-group">
+                    <label class="form-label" for="item-unidad">Unidad de Medida</label>
+                    <input type="text" id="item-unidad" class="form-control" value="UNIDAD">
+                </div>
+
+                <!-- Cantidad -->
+                <div class="form-group">
+                    <label class="form-label" for="item-cantidad">Cantidad <span class="req">*</span></label>
+                    <input type="number" id="item-cantidad" class="form-control"
+                           value="1.00" step="0.01" min="0.01">
+                </div>
+
+                <!-- Condiciones Previas del Bien -->
+                <div class="form-group full-width">
+                    <label class="form-label" for="item-condiciones">Condiciones Previas del Bien</label>
+                    <textarea id="item-condiciones" class="form-control" rows="4">El bien debe ser entregado en óptimas condiciones de funcionamiento.
+El bien deberá de ser original.
+El bien deberá incluir accesorios necesarios para su funcionamiento.
+Los bienes deberán de estar debidamente sellados.</textarea>
+                </div>
+            </div>
+
+            <!-- Características Técnicas (hidden initially) -->
+            <div id="caracteristicas-container" class="hidden mt-2">
+                <h4 style="font-size: 0.9rem; margin-bottom: 0.65rem;">
+                    ⚙️ Características Técnicas
+                </h4>
+                <div class="alert alert-info" style="margin-bottom: 0.75rem;">
+                    ℹ️ Las características marcadas como <span class="badge badge-suggested">SUGERIDA</span>
+                    son valores típicos del tipo de bien seleccionado. Confirme o modifique según el pedido real.
+                </div>
+                <div id="caracteristicas-list" class="char-list"></div>
+                <button type="button" class="btn btn-secondary btn-sm mt-1" onclick="agregarCaracteristica()">
+                    + Agregar característica
+                </button>
+            </div>
+
+            <!-- Imagen Referencial -->
+            <div class="form-grid mt-2">
+                <div class="form-group full-width">
+                    <label class="form-label" for="item-imagen">📷 Imagen Referencial</label>
+                    <div id="drop-zona" style="border:2px dashed #cbd5e1;border-radius:8px;padding:2rem;text-align:center;cursor:pointer;transition:border-color 0.2s;"
+                         ondragover="event.preventDefault(); this.style.borderColor='var(--azul-ogti)'"
+                         ondragleave="this.style.borderColor='#cbd5e1'"
+                         ondrop="event.preventDefault(); this.style.borderColor='#cbd5e1'; document.getElementById('item-imagen').files = event.dataTransfer.files; mostrarPreview(event.dataTransfer.files[0])"
+                         onclick="document.getElementById('item-imagen').click()">
+                        <div id="preview-zona">
+                            <div style="font-size:2rem;">📎</div>
+                            <p class="text-sm text-muted">Arrastre una imagen aquí o haga clic para seleccionar</p>
+                            <p class="text-sm text-muted">(PNG, JPG, GIF, WebP)</p>
+                        </div>
+                    </div>
+                    <input type="file" id="item-imagen" class="form-control" accept="image/*"
+                           style="display:none" onchange="if(this.files[0]) mostrarPreview(this.files[0])">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-item')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarItem()">Agregar Ítem</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.ET_EXISTENTE = {{ especificacion | tojson | safe if especificacion else 'null' }};
+</script>
+<script src="{{ url_for('static', filename='js/especificacion.js') }}"></script>
+{% endblock %}

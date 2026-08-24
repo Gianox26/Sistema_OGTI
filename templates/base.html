@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema OGTI{% endblock %} — Municipalidad San Román</title>
+    <meta name="description" content="Sistema de Gestión de Especificaciones Técnicas y Fichas Técnicas — OGTI Municipalidad Provincial de San Román Juliaca">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% if session.get('usuario_id') %}
+    <!-- Encabezado institucional -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="header-brand">
+                <div class="header-shield">🏛️</div>
+                <div>
+                    <div class="header-title">MUNICIPALIDAD PROVINCIAL DE SAN ROMÁN</div>
+                    <div class="header-subtitle">Oficina General de Tecnologías de la Información</div>
+                </div>
+            </div>
+            <div class="header-user">
+                <div class="user-avatar">{{ session.get('usuario_nombre', 'U')[0] }}</div>
+                <div>
+                    <div class="user-name">{{ session.get('usuario_nombre', 'Usuario') }}</div>
+                    <div class="user-role">{{ session.get('usuario_rol', '') }}</div>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="btn-logout">Salir</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navegación -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="{{ url_for('auth.dashboard') }}" class="nav-link {% if request.endpoint == 'auth.dashboard' %}active{% endif %}">
+                📊 Inicio
+            </a>
+            <a href="{{ url_for('especificaciones.pagina_lista') }}" class="nav-link {% if 'especificacion' in request.endpoint|default('') %}active{% endif %}">
+                📋 Especificaciones Técnicas
+            </a>
+            <a href="{{ url_for('fichas.pagina_lista') }}" class="nav-link {% if 'ficha' in request.endpoint|default('') %}active{% endif %}">
+                📄 Fichas Técnicas
+            </a>
+            <a href="{{ url_for('historial.pagina_historial') }}" class="nav-link {% if 'historial' in request.endpoint|default('') %}active{% endif %}">
+                🔍 Historial
+            </a>
+            <a href="{{ url_for('catalogos.pagina_proveedores') }}" class="nav-link {% if 'catalogo' in request.endpoint|default('') %}active{% endif %}">
+                📁 Catálogos
+            </a>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Mensajes flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container">
+        {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Contenido principal -->
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
