@@ -149,6 +149,13 @@ def dashboard():
     )
 
 
+@auth_bp.route('/usuarios')
+@rol_required('JEFE_OGTI')
+def usuarios():
+    """Pantalla de gestión de cuentas (crear y administrar usuarios)."""
+    return render_template('usuarios.html')
+
+
 # ============================================================
 # API: Gestión de usuarios (solo JEFE_OGTI)
 # ============================================================
@@ -204,3 +211,21 @@ def crear_usuario():
     )
 
     return jsonify(resultado), 201
+
+
+@auth_bp.route('/api/usuarios/<int:id>/toggle-activo', methods=['PUT'])
+@rol_required('JEFE_OGTI')
+def toggle_activo_usuario(id):
+    """Activa o desactiva una cuenta de usuario. No se puede desactivar a sí mismo."""
+    data = request.get_json() or {}
+    activo = bool(data.get('activo', True))
+
+    if not activo and id == session.get('usuario_id'):
+        return jsonify({'error': 'No puede desactivar su propia cuenta'}), 400
+
+    existente = query("SELECT id FROM usuarios WHERE id = %s", (id,), fetchone=True)
+    if not existente:
+        return jsonify({'error': 'Usuario no encontrado'}), 404
+
+    execute("UPDATE usuarios SET activo = %s WHERE id = %s", (activo, id))
+    return jsonify({'message': 'Usuario actualizado', 'activo': activo})

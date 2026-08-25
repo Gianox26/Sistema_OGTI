@@ -44,7 +44,7 @@ def pagina_lista():
         FROM especificaciones_tecnicas et
         LEFT JOIN dependencias d ON et.centro_costo_id = d.id
         LEFT JOIN actividades_operativas ao ON et.actividad_operativa_id = ao.id
-        JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
         JOIN usuarios u ON et.creado_por = u.id
         ORDER BY et.fecha_creacion DESC
         """
@@ -91,7 +91,7 @@ def pagina_ver(id):
         FROM especificaciones_tecnicas et
         LEFT JOIN dependencias d ON et.centro_costo_id = d.id
         LEFT JOIN actividades_operativas ao ON et.actividad_operativa_id = ao.id
-        JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
         JOIN usuarios u ON et.creado_por = u.id
         LEFT JOIN usuarios uf ON et.finalizado_por = uf.id
         WHERE et.id = %s
@@ -156,8 +156,6 @@ def crear_especificacion():
         return jsonify({'error': 'El número de pedido debe contener solo dígitos'}), 400
     if not fecha_pedido:
         return jsonify({'error': 'La fecha del pedido es obligatoria'}), 400
-    if not data.get('proveedor_id'):
-        return jsonify({'error': 'El proveedor es obligatorio'}), 400
 
     # Verificar que el número de pedido no esté duplicado
     existente = query(
@@ -189,9 +187,9 @@ def crear_especificacion():
             numero_pedido,
             meta_anio,
             fecha_pedido,
-            anio_fiscal,
-            data['proveedor_id'],
-            session['usuario_id'],
+             anio_fiscal,
+             data.get('proveedor_id'),
+             session['usuario_id'],
         ),
         returning=True
     )
@@ -441,7 +439,7 @@ def descargar_documento_et(id):
         FROM especificaciones_tecnicas et
         LEFT JOIN dependencias d ON et.centro_costo_id = d.id
         LEFT JOIN actividades_operativas ao ON et.actividad_operativa_id = ao.id
-        JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
         WHERE et.id = %s
         """,
         (id,), fetchone=True
@@ -519,7 +517,7 @@ def listar_finalizadas():
                 WHERE ie.especificacion_id = et.id) AS total_items
         FROM especificaciones_tecnicas et
         LEFT JOIN dependencias d ON et.centro_costo_id = d.id
-        JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
         WHERE et.estado = 'FINALIZADA'
         ORDER BY et.fecha_creacion DESC
         """

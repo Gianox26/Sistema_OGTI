@@ -56,22 +56,9 @@
                     <label class="form-label">Fecha del Pedido</label>
                     <input type="text" id="h-fecha" class="form-control" readonly>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Proveedor (RUC)</label>
-                    <input type="text" id="h-proveedor-ruc" class="form-control" readonly>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Razón Social</label>
-                    <input type="text" id="h-proveedor-razon" class="form-control" readonly>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Dirección del Proveedor</label>
-                    <input type="text" id="h-proveedor-dir" class="form-control">
-                    <span class="form-help">Editable si hubo cambio real</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Teléfono del Proveedor</label>
-                    <input type="text" id="h-proveedor-tel" class="form-control">
+                <div class="form-group full-width">
+                    <label class="form-label">Denominación de Adquisición</label>
+                    <input type="text" id="h-denominacion" class="form-control" readonly>
                 </div>
             </div>
 
@@ -118,8 +105,7 @@
                 <div class="form-group">
                     <label class="form-label">Estado Físico <span class="req">*</span></label>
                     <select id="ft-estado-fisico" class="form-control">
-                        <option value="">— Seleccione —</option>
-                        <option value="NUEVO">Nuevo</option>
+                        <option value="NUEVO" selected>Nuevo</option>
                         <option value="BUENO">Bueno</option>
                         <option value="REGULAR">Regular</option>
                         <option value="MALO">Malo</option>
@@ -129,6 +115,26 @@
                     <label class="form-label">N° Carta de Levantamiento</label>
                     <input type="text" id="ft-carta" class="form-control">
                 </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label">Datos del Proveedor (editables — se copian de la ET)</label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nombre completo</label>
+                    <input type="text" id="ft-proveedor-nombre" class="form-control"
+                           placeholder="Nombre completo del proveedor (se copia de la ET)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Dirección del Proveedor</label>
+                    <input type="text" id="ft-proveedor-dir" class="form-control"
+                           placeholder="Se copia de la ET; editable si hubo cambio">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono del Proveedor</label>
+                    <input type="text" id="ft-proveedor-tel" class="form-control"
+                           placeholder="Se copia de la ET; editable si hubo cambio">
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">Responsable</label>
                     <div class="gap-row">
@@ -144,6 +150,37 @@
                     <label class="form-label">Observaciones</label>
                     <textarea id="ft-observaciones" class="form-control" rows="2"
                               placeholder="Observaciones sobre el estado o condición del bien"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 3.5: Datos de adquisición -->
+    <div class="card hidden" id="paso-adquisicion">
+        <div class="card-header">
+            <h3 class="card-title">🛒 Datos de Adquisición</h3>
+            <span class="badge badge-warning">Ingreso Manual</span>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">N° Orden de Compra</label>
+                    <input type="text" id="ft-orden-compra" class="form-control"
+                           placeholder="Ej: OC-2026-001234">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Costo / Valor (S/.)</label>
+                    <input type="number" id="ft-costo" class="form-control"
+                           step="0.01" min="0" placeholder="Ej: 3599.00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha de Adquisición</label>
+                    <input type="date" id="ft-fecha-adquisicion" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tiempo de Garantía</label>
+                    <input type="text" id="ft-garantia" class="form-control"
+                           placeholder="Ej: 12 meses">
                 </div>
             </div>
         </div>
@@ -212,8 +249,9 @@
         <div class="modal-body">
             <div class="form-grid">
                 <div class="form-group">
-                    <label class="form-label">Nombre <span class="req">*</span></label>
-                    <input type="text" id="resp-nombre" class="form-control">
+                    <label class="form-label">Nombre completo <span class="req">*</span></label>
+                    <input type="text" id="resp-nombre" class="form-control"
+                           placeholder="Nombre y apellidos en un solo campo">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Cargo</label>
@@ -229,7 +267,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Dependencia</label>
-                    <select id="resp-dependencia" class="form-control">
+                    <select id="resp-dependencia" class="form-control" onchange="aplicarCargoSegunDependencia('resp-dependencia','resp-cargo')">
                         <option value="">— Seleccione —</option>
                     </select>
                 </div>
@@ -244,5 +282,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/util.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ficha.js') }}"></script>
 {% endblock %}

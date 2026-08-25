@@ -148,7 +148,7 @@ def crear_ficha():
         SELECT et.*, p.ruc, p.razon_social, p.direccion AS prov_dir,
                p.telefono AS prov_tel, p.correo AS prov_correo
         FROM especificaciones_tecnicas et
-        JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
         WHERE et.id = %s AND et.estado = 'FINALIZADA'
         """,
         (data['especificacion_id'],),
@@ -182,6 +182,7 @@ def crear_ficha():
                  proveedor_ruc, proveedor_razon, proveedor_direccion,
                  proveedor_telefono, proveedor_correo,
                  responsable_id,
+                 orden_compra, costo, fecha_adquisicion, garantia,
                  caracteristicas_verificadas, checklist,
                  creado_por)
             VALUES (%s, %s, %s,
@@ -189,6 +190,7 @@ def crear_ficha():
                     %s, %s,
                     %s, %s, %s, %s, %s,
                     %s,
+                    %s, %s, %s, %s,
                     %s::jsonb, '{}'::jsonb,
                     %s)
             RETURNING id, numero_serie, estado
@@ -202,13 +204,18 @@ def crear_ficha():
                 data.get('estado_fisico', ''),
                 data.get('observaciones', '').strip(),
                 data.get('carta_levantamiento', '').strip(),
-                # Datos del proveedor heredados de la ET
-                data.get('proveedor_ruc', et['ruc']),
-                data.get('proveedor_razon', et['razon_social']),
-                data.get('proveedor_direccion', et.get('prov_dir', '')),
-                data.get('proveedor_telefono', et.get('prov_tel', '')),
-                data.get('proveedor_correo', et.get('prov_correo', '')),
+                 # Datos del proveedor: se envían desde el formulario (editables)
+                 data.get('proveedor_ruc') or None,
+                 data.get('proveedor_razon') or None,
+                 data.get('proveedor_direccion') or None,
+                 data.get('proveedor_telefono') or None,
+                 data.get('proveedor_correo') or None,
                 data.get('responsable_id'),
+                 # Datos de adquisición del bien
+                 data.get('orden_compra') or None,
+                 data.get('costo') or None,
+                 data.get('fecha_adquisicion') or None,
+                 data.get('garantia') or None,
                 json.dumps(data.get('caracteristicas_verificadas',
                                     item.get('caracteristicas', []))),
                 session['usuario_id'],
@@ -250,7 +257,8 @@ def actualizar_ficha(id):
         'marca', 'modelo', 'color', 'numero_serie', 'estado_fisico',
         'observaciones', 'carta_levantamiento', 'responsable_id',
         'proveedor_ruc', 'proveedor_razon', 'proveedor_direccion',
-        'proveedor_telefono', 'proveedor_correo'
+        'proveedor_telefono', 'proveedor_correo',
+        'orden_compra', 'costo', 'fecha_adquisicion', 'garantia'
     ]
 
     sets = []
@@ -423,7 +431,7 @@ def carga_masiva():
         SELECT et.*, p.ruc, p.razon_social, p.direccion AS prov_dir,
                p.telefono AS prov_tel, p.correo AS prov_correo
         FROM especificaciones_tecnicas et
-        JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
         WHERE et.id = %s AND et.estado = 'FINALIZADA'
         """,
         (especificacion_id,),
@@ -476,6 +484,7 @@ def carga_masiva():
                              proveedor_ruc, proveedor_razon, proveedor_direccion,
                              proveedor_telefono, proveedor_correo,
                              responsable_id,
+                             orden_compra, costo, fecha_adquisicion, garantia,
                              caracteristicas_verificadas, checklist,
                              creado_por)
                         VALUES (%s, %s, %s,
@@ -483,6 +492,7 @@ def carga_masiva():
                                 %s, %s,
                                 %s, %s, %s, %s, %s,
                                 %s,
+                                %s, %s, %s, %s,
                                 %s::jsonb, '{}'::jsonb,
                                 %s)
                         RETURNING id, numero_serie
@@ -496,10 +506,11 @@ def carga_masiva():
                             s.get('estado_fisico', ''),
                             s.get('observaciones', '').strip(),
                             s.get('carta_levantamiento', '').strip(),
-                            et['ruc'], et['razon_social'],
-                            et.get('prov_dir', ''), et.get('prov_tel', ''),
-                            et.get('prov_correo', ''),
+                             et.get('ruc') or '', et.get('razon_social') or '',
+                             et.get('prov_dir') or '', et.get('prov_tel') or '',
+                             et.get('prov_correo') or '',
                             s.get('responsable_id'),
+                             None, None, None, None,
                             json.dumps(item.get('caracteristicas', [])),
                             session['usuario_id'],
                         )
@@ -540,6 +551,7 @@ def descargar_documento_ft(id):
                ie.descripcion AS bien_descripcion,
                tb.nombre AS tipo_bien_nombre,
                et.numero_pedido, et.fecha_pedido,
+               et.denominacion_adquisicion AS denominacion_adquisicion,
                r.nombre AS responsable_nombre, r.cargo AS responsable_cargo,
                d.nombre AS dependencia_nombre
         FROM fichas_tecnicas ft
@@ -583,12 +595,17 @@ def descargar_documento_ft(id):
         'proveedor_direccion': ft.get('proveedor_direccion', ''),
         'proveedor_telefono': ft.get('proveedor_telefono', ''),
         'proveedor_correo': ft.get('proveedor_correo', ''),
+        'denominacion_adquisicion': ft.get('denominacion_adquisicion', ''),
         'responsable_nombre': ft.get('responsable_nombre', ''),
         'responsable_cargo': ft.get('responsable_cargo', ''),
         'dependencia': ft.get('dependencia_nombre', ''),
         'numero_pedido': ft['numero_pedido'],
         'fecha_pedido': ft['fecha_pedido'].strftime('%d/%m/%Y') if ft.get('fecha_pedido') else '',
         'fecha_finalizacion': ft['fecha_finalizacion'].strftime('%d/%m/%Y') if ft.get('fecha_finalizacion') else '',
+        'orden_compra': ft.get('orden_compra', ''),
+        'costo': ft.get('costo', ''),
+        'fecha_adquisicion': ft['fecha_adquisicion'].strftime('%d/%m/%Y') if ft.get('fecha_adquisicion') else '',
+        'garantia': ft.get('garantia', ''),
     }
 
     try:

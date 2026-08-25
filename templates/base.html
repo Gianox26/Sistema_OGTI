@@ -14,64 +14,75 @@
 </head>
 <body>
     {% if session.get('usuario_id') %}
-    <!-- Encabezado institucional -->
-    <header class="header">
-        <div class="header-inner">
-            <div class="header-brand">
+    <!-- Layout con menú lateral (sidebar) -->
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
                 <div class="header-shield">🏛️</div>
                 <div>
-                    <div class="header-title">MUNICIPALIDAD PROVINCIAL DE SAN ROMÁN</div>
-                    <div class="header-subtitle">Oficina General de Tecnologías de la Información</div>
+                    <div class="sidebar-title">MUNICIPALIDAD PROVINCIAL DE SAN ROMÁN</div>
+                    <div class="sidebar-subtitle">Oficina General de Tecnologías de la Información</div>
                 </div>
             </div>
-            <div class="header-user">
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.dashboard') }}"
+                   class="sidebar-link {% if request.endpoint == 'auth.dashboard' %}active{% endif %}">
+                    <span class="sidebar-icon">📊</span> Inicio
+                </a>
+                <a href="{{ url_for('especificaciones.pagina_lista') }}"
+                   class="sidebar-link {% if 'especificacion' in request.endpoint|default('') %}active{% endif %}">
+                    <span class="sidebar-icon">📋</span> Especificaciones Técnicas
+                </a>
+                <a href="{{ url_for('fichas.pagina_lista') }}"
+                   class="sidebar-link {% if 'ficha' in request.endpoint|default('') %}active{% endif %}">
+                    <span class="sidebar-icon">📄</span> Fichas Técnicas
+                </a>
+                <a href="{{ url_for('historial.pagina_historial') }}"
+                   class="sidebar-link {% if 'historial' in request.endpoint|default('') %}active{% endif %}">
+                    <span class="sidebar-icon">🔍</span> Historial
+                </a>
+                <a href="{{ url_for('catalogos.pagina_proveedores') }}"
+                   class="sidebar-link {% if 'catalogo' in request.endpoint|default('') %}active{% endif %}">
+                    <span class="sidebar-icon">📁</span> Catálogos
+                </a>
+                {% if session.get('usuario_rol') == 'JEFE_OGTI' %}
+                <a href="{{ url_for('auth.usuarios') }}"
+                   class="sidebar-link {% if request.endpoint == 'auth.usuarios' %}active{% endif %}">
+                    <span class="sidebar-icon">👤</span> Usuarios
+                </a>
+                {% endif %}
+            </nav>
+
+            <div class="sidebar-footer">
                 <div class="user-avatar">{{ session.get('usuario_nombre', 'U')[0] }}</div>
-                <div>
+                <div class="sidebar-user-info">
                     <div class="user-name">{{ session.get('usuario_nombre', 'Usuario') }}</div>
                     <div class="user-role">{{ session.get('usuario_rol', '') }}</div>
                 </div>
-                <a href="{{ url_for('auth.logout') }}" class="btn-logout">Salir</a>
+                <a href="{{ url_for('auth.logout') }}" class="btn-logout" title="Cerrar sesión">⏻</a>
             </div>
-        </div>
-    </header>
+        </aside>
 
-    <!-- Navegación -->
-    <nav class="nav">
-        <div class="nav-inner">
-            <a href="{{ url_for('auth.dashboard') }}" class="nav-link {% if request.endpoint == 'auth.dashboard' %}active{% endif %}">
-                📊 Inicio
-            </a>
-            <a href="{{ url_for('especificaciones.pagina_lista') }}" class="nav-link {% if 'especificacion' in request.endpoint|default('') %}active{% endif %}">
-                📋 Especificaciones Técnicas
-            </a>
-            <a href="{{ url_for('fichas.pagina_lista') }}" class="nav-link {% if 'ficha' in request.endpoint|default('') %}active{% endif %}">
-                📄 Fichas Técnicas
-            </a>
-            <a href="{{ url_for('historial.pagina_historial') }}" class="nav-link {% if 'historial' in request.endpoint|default('') %}active{% endif %}">
-                🔍 Historial
-            </a>
-            <a href="{{ url_for('catalogos.pagina_proveedores') }}" class="nav-link {% if 'catalogo' in request.endpoint|default('') %}active{% endif %}">
-                📁 Catálogos
-            </a>
-        </div>
-    </nav>
-    {% endif %}
+        <div class="content">
+            <!-- Mensajes flash -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-container">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
 
-    <!-- Mensajes flash -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="flash-container">
-        {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">
-            {{ message }}
+            <!-- Contenido principal -->
+            {% block content %}{% endblock %}
         </div>
-        {% endfor %}
     </div>
     {% endif %}
-    {% endwith %}
-
-    <!-- Contenido principal -->
-    {% block content %}{% endblock %}
 
     {% block scripts %}{% endblock %}
 </body>

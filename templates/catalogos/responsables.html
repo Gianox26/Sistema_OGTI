@@ -49,7 +49,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Dependencia</label>
-                    <select id="f-dependencia" class="form-control">
+                    <select id="f-dependencia" class="form-control" onchange="aplicarCargoSegunDependencia('f-dependencia','f-cargo')">
                         <option value="">— Seleccione —</option>
                     </select>
                 </div>
@@ -63,6 +63,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/util.js') }}"></script>
 <script src="{{ url_for('static', filename='js/catalogos.js') }}"></script>
 <script>
     const CATALOGO_TIPO = 'responsables';

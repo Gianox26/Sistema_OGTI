@@ -1,7 +1,7 @@
 /**
  * especificacion.js — Lógica del formulario de Especificación Técnica
  * Campos según formato oficial: Centro de Costo, Actividad Operativa,
- * Denominación, N° Pedido (solo dígitos), Meta-Año, Proveedor.
+ * Denominación, N° Pedido (solo dígitos), Meta-Año.
  * Ítems con condiciones previas, características, imagen y reglamentos.
  */
 
@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', function () {
     Promise.all([
         cargarDependencias(),
         cargarActividades(),
-        cargarProveedores(),
         cargarTiposBien()
     ]).then(() => {
         if (window.ET_EXISTENTE) {
@@ -36,7 +35,6 @@ function cargarETExistente(et) {
         const fecha = new Date(et.fecha_pedido).toISOString().split('T')[0];
         document.getElementById('fecha_pedido').value = fecha;
     }
-    if (et.proveedor_id) document.getElementById('proveedor_id').value = et.proveedor_id;
 
     // Mostrar sección de ítems
     document.getElementById('seccion-items').classList.remove('hidden');
@@ -78,21 +76,6 @@ function cargarActividades() {
         });
 }
 
-function cargarProveedores() {
-    return fetch('/api/proveedores')
-        .then(r => r.json())
-        .then(data => {
-            const sel = document.getElementById('proveedor_id');
-            sel.innerHTML = '<option value="">— Seleccione proveedor —</option>';
-            data.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.razon_social + ' (RUC: ' + p.ruc + ')';
-                sel.appendChild(opt);
-            });
-        });
-}
-
 function cargarTiposBien() {
     return fetch('/api/tipos-bien')
         .then(r => r.json())
@@ -114,32 +97,6 @@ function cargarTiposBien() {
 // ============================================================
 // Modales de catálogos inline
 // ============================================================
-
-function abrirModalProveedor() {
-    document.getElementById('modal-proveedor').classList.add('show');
-}
-
-function guardarProveedor() {
-    const body = {
-        ruc: document.getElementById('prov-ruc').value.trim(),
-        razon_social: document.getElementById('prov-razon').value.trim(),
-        direccion: document.getElementById('prov-direccion').value.trim(),
-        telefono: document.getElementById('prov-telefono').value.trim(),
-        correo: document.getElementById('prov-correo').value.trim(),
-    };
-    if (!body.ruc || !body.razon_social) { alert('RUC y razón social son obligatorios'); return; }
-
-    fetch('/api/proveedores', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
-    })
-    .then(r => r.json().then(data => ({status: r.status, data})))
-    .then(({status, data}) => {
-        if (status >= 400) { alert(data.error || 'Error'); return; }
-        cerrarModal('modal-proveedor');
-        cargarProveedores();
-        setTimeout(() => { document.getElementById('proveedor_id').value = data.id; }, 300);
-    });
-}
 
 function abrirModalDependencia() {
     document.getElementById('modal-dependencia').classList.add('show');
@@ -196,13 +153,11 @@ function guardarET() {
     const numero_pedido = document.getElementById('numero_pedido').value.trim();
     const denominacion = document.getElementById('denominacion_adquisicion').value.trim();
     const fecha = document.getElementById('fecha_pedido').value;
-    const proveedor_id = document.getElementById('proveedor_id').value;
 
     if (!denominacion) { alert('La denominación de la adquisición es obligatoria'); return; }
     if (!numero_pedido) { alert('El número de pedido es obligatorio'); return; }
     if (!/^\d+$/.test(numero_pedido)) { alert('El número de pedido debe contener solo dígitos'); return; }
     if (!fecha) { alert('La fecha del pedido es obligatoria'); return; }
-    if (!proveedor_id) { alert('Seleccione un proveedor'); return; }
 
     const meta_codigo = document.getElementById('meta_codigo').value.trim();
     const anio_fiscal = parseInt(document.getElementById('anio_fiscal').value) || 2026;
@@ -217,7 +172,6 @@ function guardarET() {
         meta_anio: meta_anio,
         anio_fiscal: anio_fiscal,
         fecha_pedido: fecha,
-        proveedor_id: parseInt(proveedor_id),
     };
 
     const url = etId ? ('/api/especificaciones/' + etId) : '/api/especificaciones';
@@ -255,7 +209,6 @@ function abrirModalItem() {
         'Los bienes deberán de estar debidamente sellados.';
     document.getElementById('caracteristicas-container').classList.add('hidden');
     resetPreview();
-}
     const imgInput = document.getElementById('item-imagen');
     if (imgInput) imgInput.value = '';
 }

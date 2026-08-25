@@ -85,20 +85,6 @@
                     <input type="date" id="fecha_pedido" class="form-control" required>
                 </div>
 
-                <!-- 7. Proveedor -->
-                <div class="form-group">
-                    <label class="form-label" for="proveedor_id">
-                        Proveedor <span class="req">*</span>
-                    </label>
-                    <div class="gap-row">
-                        <select id="proveedor_id" class="form-control flex-1" required>
-                            <option value="">— Seleccione un proveedor —</option>
-                        </select>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalProveedor()">
-                            + Nuevo
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <div style="margin-top: 1.25rem; text-align: right;">
@@ -133,49 +119,6 @@
             <button type="button" class="btn btn-success" id="btn-finalizar-et" onclick="finalizarET()">
                 ✅ Finalizar Especificación Técnica
             </button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal: Nuevo Proveedor -->
-<div class="modal-overlay" id="modal-proveedor">
-    <div class="modal">
-        <div class="modal-header">
-            <h3>🏢 Registrar Nuevo Proveedor</h3>
-            <button type="button" class="modal-close" onclick="cerrarModal('modal-proveedor')">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label class="form-label" for="prov-ruc">RUC <span class="req">*</span></label>
-                    <input type="text" id="prov-ruc" class="form-control" maxlength="11"
-                           placeholder="11 dígitos">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="prov-razon">Razón Social <span class="req">*</span></label>
-                    <input type="text" id="prov-razon" class="form-control"
-                           placeholder="Ej: CORPORACIÓN TECNOLÓGICA S.A.C.">
-                </div>
-                <div class="form-group full-width">
-                    <label class="form-label" for="prov-direccion">Dirección</label>
-                    <input type="text" id="prov-direccion" class="form-control"
-                           placeholder="Ej: Jr. San Román 123, Juliaca">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="prov-telefono">Teléfono</label>
-                    <input type="text" id="prov-telefono" class="form-control"
-                           placeholder="Ej: 951234567">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="prov-correo">Correo</label>
-                    <input type="email" id="prov-correo" class="form-control"
-                           placeholder="proveedor@ejemplo.com">
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-proveedor')">Cancelar</button>
-            <button type="button" class="btn btn-primary" onclick="guardarProveedor()">Guardar Proveedor</button>
         </div>
     </div>
 </div>

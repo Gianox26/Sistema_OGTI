@@ -39,7 +39,7 @@ function cargarETsFinalizadas() {
             data.forEach(et => {
                 const opt = document.createElement('option');
                 opt.value = et.id;
-                opt.textContent = `${et.numero_pedido} — ${et.proveedor_nombre} (${et.total_items} ítems)`;
+                opt.textContent = `${et.numero_pedido} — ${et.denominacion_adquisicion || 'Sin denominación'} (${et.total_items} ítems)`;
                 sel.appendChild(opt);
             });
         });
@@ -94,21 +94,18 @@ function cargarDatosItem() {
             if (etSeleccionada) {
                 document.getElementById('h-pedido').value = etSeleccionada.numero_pedido || '';
                 document.getElementById('h-fecha').value = etSeleccionada.fecha_pedido || '';
+                document.getElementById('h-denominacion').value = etSeleccionada.denominacion_adquisicion || '';
             }
 
-            // Cargar proveedor desde los datos de la ET
-            fetch(`/api/proveedores`)
-                .then(r => r.json())
-                .then(proveedores => {
-                    // Buscar por la ET
-                    // Simplificado: mostramos los datos disponibles
-                    document.getElementById('h-proveedor-ruc').value = '';
-                    document.getElementById('h-proveedor-razon').value = etSeleccionada ? etSeleccionada.proveedor_nombre : '';
-                });
+            // Precargar datos del proveedor (editables) desde la ET
+            document.getElementById('ft-proveedor-nombre').value = (etSeleccionada && etSeleccionada.proveedor_nombre) || '';
+            document.getElementById('ft-proveedor-dir').value = (etSeleccionada && etSeleccionada.proveedor_direccion) || '';
+            document.getElementById('ft-proveedor-tel').value = (etSeleccionada && etSeleccionada.proveedor_telefono) || '';
 
             // Mostrar las secciones ocultas
             document.getElementById('paso-datos-heredados').classList.remove('hidden');
             document.getElementById('paso-datos-manuales').classList.remove('hidden');
+            document.getElementById('paso-adquisicion').classList.remove('hidden');
             document.getElementById('paso-checklist').classList.remove('hidden');
             document.getElementById('paso-acciones').classList.remove('hidden');
             document.getElementById('paso-acciones').style.display = 'flex';
@@ -283,8 +280,14 @@ function guardarFicha() {
         observaciones: document.getElementById('ft-observaciones').value.trim(),
         carta_levantamiento: document.getElementById('ft-carta').value.trim(),
         responsable_id: document.getElementById('ft-responsable').value || null,
-        proveedor_direccion: document.getElementById('h-proveedor-dir').value.trim(),
-        proveedor_telefono: document.getElementById('h-proveedor-tel').value.trim(),
+        proveedor_razon: document.getElementById('ft-proveedor-nombre').value.trim(),
+        proveedor_direccion: document.getElementById('ft-proveedor-dir').value.trim(),
+        proveedor_telefono: document.getElementById('ft-proveedor-tel').value.trim(),
+        orden_compra: document.getElementById('ft-orden-compra').value.trim(),
+        costo: document.getElementById('ft-costo').value
+                  ? parseFloat(document.getElementById('ft-costo').value) : null,
+        fecha_adquisicion: document.getElementById('ft-fecha-adquisicion').value || null,
+        garantia: document.getElementById('ft-garantia').value.trim(),
         caracteristicas_verificadas: itemSeleccionado ? (itemSeleccionado.caracteristicas || []) : [],
     };
 

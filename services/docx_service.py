@@ -14,9 +14,16 @@ import io
 import copy
 from docxtpl import DocxTemplate
 from docx import Document
-from docx.shared import Inches, Pt, Cm
+from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
 from config import Config
+
+# Tamaño estándar para las imágenes referenciales: se fija la ALTURA en
+# ALTO_IMAGEN_ESTANDAR y el ANCHO se calcula según la proporción de cada
+# imagen, para que ninguna quede distorsionada. Ej.: 15x21 -> 5x7 (misma
+# proporción, altura estándar 7).
+ALTO_IMAGEN_ESTANDAR = Cm(7)
 
 
 def _copiar_formato_celda(celda_origen, celda_destino):
@@ -155,55 +162,12 @@ def generar_especificacion_tecnica(datos):
             ]
             _agregar_fila_tabla(tabla_items, valores, fila_ref_idx=1)
 
-    # ── Paso 3: Insertar características técnicas por ítem ──
-    # Buscar el párrafo donde están las características
-    # y reemplazar con las de cada ítem
-    for i, p in enumerate(doc.paragraphs):
-        texto = p.text.strip()
-        # Buscar el placeholder de características o el párrafo vacío
-        # después de "debidamente sellados"
-        if texto == '' and i > 0:
-            texto_prev = doc.paragraphs[i - 1].text.strip() if i > 0 else ''
-            if 'sellados' in texto_prev.lower() or texto_prev == '':
-                # Aquí insertamos las características de cada ítem
-                pass
-
-        # Si encontramos el placeholder {{ caracteristicas_texto }}
-        if '{{ caracteristicas_texto }}' in texto or texto == '':
-            # Verificar contexto
-            pass
-
-    # Buscar y reemplazar el texto de características
-    for p in doc.paragraphs:
-        if p.text.strip() in ('', '{{ caracteristicas_texto }}'):
-            continue
-        # Dejar intactos los demás párrafos
-
-    # Escribir características después del placeholder
-    for p_idx, p in enumerate(doc.paragraphs):
-        if p.text.strip() == '' and p_idx > 5:
-            # Verificar si el párrafo anterior menciona sellados o CARACTERISTICAS
-            if p_idx > 0:
-                prev_text = doc.paragraphs[p_idx - 1].text.strip().upper()
-                if 'CARACTERISTICAS' in prev_text or 'SELLADOS' in prev_text:
-                    # Insertar características de los ítems aquí
-                    chars_text = _formatear_todas_caracteristicas(items)
-                    if p.runs:
-                        p.runs[0].text = chars_text
-                    else:
-                        p.text = chars_text
-                    break
-
-    # ── Paso 4: Manejar imagen referencial ──
-    # Eliminar la imagen vieja del crimping y agregar la nueva si existe
+    # ── Paso 3: Escribir características e imágenes referenciales intercaladas ──
+    # Cada ítem lleva su propio encabezado en negrita "CARACTERÍSTICAS DE
+    # <descripción>" y, justo debajo, su imagen referencial (si la tiene),
+    # en el orden: características 1 + imagen 1, características 2 + imagen 2...
     _limpiar_imagenes_existentes(doc)
-
-    for item in items:
-        img_path = item.get('imagen_referencial', '')
-        if img_path:
-            full_path = os.path.join(Config.BASE_DIR, 'static', img_path)
-            if os.path.exists(full_path):
-                _insertar_imagen_despues_de_caracteristicas(doc, full_path)
+    _escribir_caracteristicas_tituladas(doc, None, None, items=items)
 
     # Guardar resultado final
     buffer = io.BytesIO()
@@ -215,6 +179,8 @@ def generar_especificacion_tecnica(datos):
 def generar_ficha_tecnica(datos):
     """
     Genera el documento .docx de Ficha Técnica rellenando la plantilla oficial.
+    Las características se escriben con un encabezado en negrita
+    "CARACTERÍSTICAS DE <descripción del bien>" para diferenciar el ítem.
     """
     plantilla_path = Config.PLANTILLA_FICHA
 
@@ -224,23 +190,38 @@ def generar_ficha_tecnica(datos):
             "Coloque el archivo ficha_tecnica_tpl.docx en plantillas_docx/"
         )
 
-    # Pre-formatear características como texto
     chars = datos.get('caracteristicas', [])
-    if isinstance(chars, list):
-        lineas = []
-        for c in chars:
-            nombre = c.get('nombre', '')
-            valor = c.get('valor', c.get('valor_sugerido', ''))
-            if nombre:
-                lineas.append(f"{nombre}: {valor}")
-        datos['caracteristicas_texto'] = ' | '.join(lineas)
-    elif isinstance(chars, str):
-        datos['caracteristicas_texto'] = chars
-    else:
-        datos['caracteristicas_texto'] = ''
+    if not isinstance(chars, list):
+        chars = []
+    titulo = f"CARACTERÍSTICAS DE {datos.get('bien_descripcion') or 'BIEN'}"
 
-    doc = DocxTemplate(plantilla_path)
-    doc.render(datos)
+    # Renderizar con un marcador centinela; luego lo reemplazamos con
+    # python-docx para poder aplicar negrita al encabezado. El marcador
+    # aparece en las 4 columnas del cuadro, pero solo la primera lleva el
+    # contenido (las demás se dejan vacías para no duplicar el texto).
+    SENTINEL = '__caracteristicas_texto__'
+    doc_tpl = DocxTemplate(plantilla_path)
+    datos_render = {k: v for k, v in datos.items() if k != 'caracteristicas_texto'}
+    datos_render['caracteristicas_texto'] = SENTINEL
+    doc_tpl.render(datos_render)
+
+    buffer = io.BytesIO()
+    doc_tpl.save(buffer)
+    buffer.seek(0)
+    doc = Document(buffer)
+
+    ocurrencias = [p for p in _iterar_parrafos_doc(doc) if SENTINEL in p.text]
+    for n, p in enumerate(ocurrencias):
+        if n == 0:
+            _escribir_bloque_caract(p, titulo, chars)
+        else:
+            for r in list(p.runs):
+                r._element.getparent().remove(r._element)
+
+    # Imagen referencial del bien (si la FT la incluye)
+    imagen = datos.get('imagen_referencial')
+    if imagen:
+        _insertar_imagen_doc(doc, imagen)
 
     buffer = io.BytesIO()
     doc.save(buffer)
@@ -304,21 +285,267 @@ def _limpiar_imagenes_existentes(doc):
                 run._element.remove(pict)
 
 
-def _insertar_imagen_despues_de_caracteristicas(doc, imagen_path):
-    """Inserta una imagen referencial después de las características."""
-    # Buscar un buen lugar para insertar (después de CARACTERÍSTICAS)
+def _escribir_caracteristicas(doc, items):
+    """
+    Escribe las características de los ítems en el párrafo bordeado
+    (dentro del cuadro) que sigue a 'CARACTERISTICAS'/'SELLADOS'.
+    Devuelve el índice de ese párrafo o None.
+    """
+    target = None
+    target_idx = None
     for i, p in enumerate(doc.paragraphs):
-        texto = p.text.strip().upper()
-        if 'REGLAMENTOS' in texto or 'ACONDICIONAMIENTO' in texto:
-            # Insertar antes de Reglamentos Técnicos
-            # Crear un nuevo párrafo antes de este
-            new_p = doc.paragraphs[i - 1] if i > 0 else p
-            try:
-                run = new_p.add_run('\n\nImagen Referencial:\n')
-                run.font.size = Pt(10)
-                run.bold = True
-                run = new_p.add_run()
-                run.add_picture(imagen_path, width=Inches(4))
-            except Exception:
-                pass  # Si la imagen no se puede insertar, continuar sin ella
+        txt = p.text.strip()
+        if '{{ caracteristicas_texto }}' in txt:
+            target = p
+            target_idx = i
             break
+        # Respaldo: párrafo vacío justo después del título CARACTERÍSTICAS
+        if txt == '' and i > 0:
+            prev = doc.paragraphs[i - 1].text.strip().upper()
+            if prev == 'CARACTERISTICAS':
+                target = p
+                target_idx = i
+                break
+
+    if target is None:
+        return None
+
+    texto = _formatear_todas_caracteristicas(items)
+    if texto:
+        if target.runs:
+            target.runs[0].text = texto
+            for r in target.runs[1:]:
+                r.text = ''
+        else:
+            target.text = texto
+
+    return target_idx
+
+
+def _encontrar_parrafo_caracteristicas(doc):
+    """Devuelve (párrafo, índice) del placeholder de características.
+
+    Busca en párrafos de nivel superior y, si no lo encuentra (la Ficha
+    Técnica suele ubicar el placeholder dentro de una celda de tabla),
+    también en el interior de las tablas.
+    """
+    # 1) Párrafos de nivel superior (conserva el índice para la ET)
+    for i, p in enumerate(doc.paragraphs):
+        if 'caracteristicas_texto' in p.text:
+            return p, i
+    for i, p in enumerate(doc.paragraphs):
+        if p.text.strip() == '' and i > 0:
+            prev = doc.paragraphs[i - 1].text.strip().upper()
+            # Evita confundir con el título "CARACTERÍSTICAS TÉCNICAS:"
+            if 'CARACTER' in prev and 'TÉCNICAS' not in prev and 'TECNICAS' not in prev:
+                return p, i
+
+    # 2) Dentro de tablas (Ficha Técnica)
+    def _buscar_en_celda(parrafos):
+        for j, p in enumerate(parrafos):
+            if '{{ caracteristicas_texto }}' in p.text:
+                return p
+        for j, p in enumerate(parrafos):
+            if p.text.strip() == '' and j > 0:
+                prev = parrafos[j - 1].text.strip().upper()
+                if 'CARACTER' in prev and 'TÉCNICAS' not in prev and 'TECNICAS' not in prev:
+                    return p
+        return None
+
+    for tabla in doc.tables:
+        for fila in tabla.rows:
+            for celda in fila.cells:
+                p = _buscar_en_celda(celda.paragraphs)
+                if p is not None:
+                    return p, None
+
+    return None, None
+
+
+def _clonar_parrafo_despues(ref_parrafo):
+    """Crea un párrafo vacío (mismo formato/borde que ref) justo después de ref y lo devuelve."""
+    from docx.text.paragraph import Paragraph
+    new_p = copy.deepcopy(ref_parrafo._p)
+    for r in new_p.findall(qn('w:r')):
+        new_p.remove(r)
+    ref_parrafo._p.addnext(new_p)
+    return Paragraph(new_p, ref_parrafo._parent)
+
+
+def _insertar_imagen_en_parrafo(parrafo, imagen):
+    """Inserta la imagen referencial en el párrafo indicado. Devuelve True si tuvo éxito."""
+    full = os.path.join(Config.BASE_DIR, 'static', imagen)
+    if not os.path.exists(full):
+        return False
+    try:
+        run = parrafo.add_run()
+        # Altura fija; python-docx calcula el ancho proporcional automáticamente,
+        # así la imagen no se distorsiona y no depende de Pillow.
+        run.add_picture(full, height=ALTO_IMAGEN_ESTANDAR)
+        parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        return True
+    except Exception:
+        return False
+
+
+def _escribir_caracteristicas_tituladas(doc, titulo, chars, items=None):
+    """
+    Escribe las características en el cuadro e intercala la imagen referencial
+    de cada ítem justo debajo de sus características.
+
+    - Ficha Técnica (items=None): un único bloque cuyo encabezado
+      'titulo' se imprime en NEGRITA.
+    - Especificación Técnica (items): un encabezado en negrita por ítem
+      "CARACTERÍSTICAS DE <descripción>" y, a continuación, su imagen, en el
+      orden: características 1 + imagen 1, características 2 + imagen 2, etc.
+
+    Trabaja con referencias a objetos párrafo (no índices) para ser robusto
+    tanto si el cuadro está en el cuerpo del documento como dentro de una tabla.
+    """
+    p, _ = _encontrar_parrafo_caracteristicas(doc)
+    if p is None:
+        return None
+
+    # Alineación a la izquierda (sin justificar) para evitar espacios
+    # irregulares entre palabras en las líneas cortas.
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    if items is not None:
+        bloques = [
+            (f"CARACTERÍSTICAS DE {it.get('descripcion', f'Ítem {n + 1}')}",
+             it.get('caracteristicas', []))
+            for n, it in enumerate(items)
+        ]
+        items_list = items
+    else:
+        bloques = [(titulo, chars if isinstance(chars, list) else [])]
+        items_list = None
+
+    actual = p
+    for n, (encabezado, lista) in enumerate(bloques):
+        # A partir del segundo ítem se usa un párrafo bordeado nuevo insertado
+        # justo después del bloque anterior (características o imagen).
+        if n > 0:
+            actual = _clonar_parrafo_despues(actual)
+        if actual is None:
+            break
+
+        # Limpiar runs previos del párrafo
+        for r in list(actual.runs):
+            r._element.getparent().remove(r._element)
+
+        r_tit = actual.add_run(encabezado)
+        r_tit.bold = True
+
+        lineas = []
+        for c in (lista or []):
+            nombre = c.get('nombre', '')
+            valor = c.get('valor', c.get('valor_sugerido', ''))
+            if nombre:
+                lineas.append(f"{nombre}: {valor}")
+        cuerpo = '\n'.join(lineas) if lineas else 'Sin características registradas.'
+
+        r_cuer = actual.add_run('\n' + cuerpo)
+        r_cuer.bold = False
+
+        # Imagen referencial del ítem, justo después de sus características
+        if items_list is not None:
+            img = items_list[n].get('imagen_referencial', '')
+            if img:
+                parrafo_imagen = _clonar_parrafo_despues(actual)
+                if parrafo_imagen is None or not _insertar_imagen_en_parrafo(parrafo_imagen, img):
+                    # Sin párrafo o falló la imagen: descartar el clon vacío
+                    if parrafo_imagen is not None:
+                        parrafo_imagen._p.getparent().remove(parrafo_imagen._p)
+                else:
+                    actual = parrafo_imagen
+
+    return None
+
+
+def _escribir_bloque_caract(p, titulo, chars):
+    """
+    Escribe un bloque de características con encabezado en negrita
+    (Ficha Técnica, un único bien). Alineado a la izquierda.
+    """
+    for r in list(p.runs):
+        r._element.getparent().remove(r._element)
+
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    r_tit = p.add_run(titulo)
+    r_tit.bold = True
+
+    lineas = []
+    for c in (chars or []):
+        nombre = c.get('nombre', '')
+        valor = c.get('valor', c.get('valor_sugerido', ''))
+        if nombre:
+            lineas.append(f"{nombre}: {valor}")
+    cuerpo = '\n'.join(lineas) if lineas else 'Sin características registradas.'
+
+    r_cuer = p.add_run('\n' + cuerpo)
+    r_cuer.bold = False
+
+
+def _indice_parrafo(doc, p):
+    """Devuelve el índice de un párrafo dentro de doc.paragraphs."""
+    for i, par in enumerate(doc.paragraphs):
+        if par._p is p._p:
+            return i
+    return -1
+
+
+def _insertar_imagen_doc(doc, imagen, desde_idx=-1):
+    """
+    Inserta una imagen referencial (Ficha Técnica) en un párrafo bordeado
+    vacío. Devuelve el índice del párrafo donde se insertó, o None.
+    """
+    p = _siguiente_parrafo_bordeado_vacio(doc, desde_idx)
+    if p is None:
+        p = _clonar_parrafo_bordeado(doc, desde_idx)
+    if p is None:
+        return None
+    if _insertar_imagen_en_parrafo(p, imagen):
+        return _indice_parrafo(doc, p)
+    return None
+
+
+def _tiene_borde(p):
+    """Indica si un párrafo tiene borde (está dentro de un cuadro)."""
+    pPr = p._p.pPr
+    if pPr is None:
+        return False
+    return pPr.find(qn('w:pBdr')) is not None
+
+
+def _tiene_imagen(p):
+    """Indica si un párrafo ya contiene una imagen embebida."""
+    for run in p.runs:
+        if run._element.find(qn('w:drawing')) is not None or \
+           run._element.find(qn('w:pict')) is not None:
+            return True
+    return False
+
+
+def _siguiente_parrafo_bordeado_vacio(doc, desde_idx):
+    """Devuelve el próximo párrafo bordeado, vacío y sin imagen."""
+    for p in doc.paragraphs[desde_idx + 1:]:
+        if _tiene_borde(p) and p.text.strip() == '' and not _tiene_imagen(p):
+            return p
+    return None
+
+
+def _clonar_parrafo_bordeado(doc, ref_idx):
+    """Crea un párrafo bordeado vacío justo después de ref_idx."""
+    from docx.text.paragraph import Paragraph
+    ref = doc.paragraphs[ref_idx]
+    pPr = ref._p.pPr
+    if pPr is None or pPr.find(qn('w:pBdr')) is None:
+        return None
+    new_p = copy.deepcopy(ref._p)
+    # Eliminar el contenido (runs) del clon
+    for r in new_p.findall(qn('w:r')):
+        new_p.remove(r)
+    ref._p.addnext(new_p)
+    return Paragraph(new_p, doc)

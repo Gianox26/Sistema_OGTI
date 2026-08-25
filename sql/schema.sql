@@ -124,8 +124,8 @@ CREATE TABLE IF NOT EXISTS especificaciones_tecnicas (
     meta                     VARCHAR(100),
     finalidad_publica        TEXT,
     objetivo                 TEXT,
-    -- Proveedor (no aparece en la tabla superior del TDR, pero se vincula)
-    proveedor_id             INTEGER NOT NULL REFERENCES proveedores(id),
+    -- Proveedor (opcional; no es obligatorio en el formulario de ET)
+    proveedor_id             INTEGER REFERENCES proveedores(id),
     estado                   VARCHAR(20) NOT NULL DEFAULT 'BORRADOR'
                                  CHECK (estado IN ('BORRADOR', 'FINALIZADA', 'ANULADA')),
     creado_por               INTEGER NOT NULL REFERENCES usuarios(id),
@@ -216,6 +216,12 @@ CREATE TABLE IF NOT EXISTS fichas_tecnicas (
     proveedor_direccion   VARCHAR(300),
     proveedor_telefono    VARCHAR(30),
     proveedor_correo      VARCHAR(150),
+
+    -- Datos de adquisición del bien
+    orden_compra          VARCHAR(50),
+    costo                 NUMERIC(14,2),
+    fecha_adquisicion     DATE,
+    garantia              VARCHAR(50),
 
     -- Responsable que recibe
     responsable_id        INTEGER REFERENCES responsables(id),

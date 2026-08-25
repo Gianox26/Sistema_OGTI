@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header">
+        <div>
+            <h2>👤 Gestión de Usuarios</h2>
+            <p>Crear y administrar cuentas de acceso al sistema</p>
+        </div>
+    </div>
+
+    <!-- Crear nueva cuenta -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">➕ Nueva Cuenta</h3>
+            <span class="badge badge-warning">Solo JEFE_OGTI</span>
+        </div>
+        <div class="card-body">
+            <form id="form-usuario" class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Usuario <span class="req">*</span></label>
+                    <input type="text" id="u-username" class="form-control"
+                           placeholder="Nombre de usuario para iniciar sesión" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contraseña <span class="req">*</span></label>
+                    <input type="password" id="u-password" class="form-control"
+                           placeholder="Contraseña de acceso" required>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Nombre completo <span class="req">*</span></label>
+                    <input type="text" id="u-nombre" class="form-control"
+                           placeholder="Nombres y apellidos" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cargo</label>
+                    <input type="text" id="u-cargo" class="form-control"
+                           placeholder="Ej: Practicante, Analista">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Rol</label>
+                    <select id="u-rol" class="form-control">
+                        <option value="OPERADOR">OPERADOR</option>
+                        <option value="JEFE_OGTI">JEFE_OGTI</option>
+                    </select>
+                </div>
+                <div class="form-group full-width">
+                    <button type="submit" class="btn btn-primary">💾 Crear Usuario</button>
+                    <span id="u-feedback" class="form-help"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Listado de usuarios -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📋 Usuarios Registrados</h3>
+        </div>
+        <div class="card-body" style="padding:0;">
+            <div class="table-wrap" style="border:none; border-radius:0;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Nombre completo</th>
+                            <th>Cargo</th>
+                            <th>Rol</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="usuarios-tbody">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Cargando…</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function cargarUsuarios() {
+    fetch('/api/usuarios')
+        .then(r => r.json())
+        .then(data => {
+            const tb = document.getElementById('usuarios-tbody');
+            if (!data.length) {
+                tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Sin usuarios registrados</td></tr>';
+                return;
+            }
+            tb.innerHTML = data.map(u => `
+                <tr>
+                    <td><strong>${u.username}</strong></td>
+                    <td>${u.nombre_completo || '-'}</td>
+                    <td>${u.cargo || '-'}</td>
+                    <td>${u.rol}</td>
+                    <td>${u.activo
+                        ? '<span class="badge badge-success">Activo</span>'
+                        : '<span class="badge badge-danger">Inactivo</span>'}</td>
+                    <td>${u.activo
+                        ? `<button class="btn btn-danger btn-sm" onclick="toggleActivo(${u.id}, false)">Desactivar</button>`
+                        : `<button class="btn btn-secondary btn-sm" onclick="toggleActivo(${u.id}, true)">Activar</button>`}</td>
+                </tr>`).join('');
+        });
+}
+
+function toggleActivo(id, activo) {
+    fetch(`/api/usuarios/${id}/toggle-activo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo })
+    })
+    .then(r => r.json().then(d => ({ s: r.status, d })))
+    .then(({ s, d }) => {
+        if (s >= 400) { alert(d.error || 'Error'); return; }
+        cargarUsuarios();
+    });
+}
+
+document.getElementById('form-usuario').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const body = {
+        username: document.getElementById('u-username').value.trim(),
+        password: document.getElementById('u-password').value,
+        nombre_completo: document.getElementById('u-nombre').value.trim(),
+        cargo: document.getElementById('u-cargo').value.trim(),
+        rol: document.getElementById('u-rol').value
+    };
+    const fb = document.getElementById('u-feedback');
+
+    if (!body.username || !body.password || !body.nombre_completo) {
+        fb.textContent = 'Complete los campos obligatorios (*)';
+        fb.className = 'form-error';
+        return;
+    }
+
+    fetch('/api/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json().then(d => ({ s: r.status, d })))
+    .then(({ s, d }) => {
+        if (s >= 400) {
+            fb.textContent = d.error || 'Error al crear usuario';
+            fb.className = 'form-error';
+            return;
+        }
+        fb.textContent = '✅ Usuario creado correctamente';
+        fb.className = 'form-help';
+        fb.style.color = 'var(--green-700)';
+        e.target.reset();
+        cargarUsuarios();
+    });
+});
+
+cargarUsuarios();
+</script>
+{% endblock %}
