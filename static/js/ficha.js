@@ -552,9 +552,91 @@ function buscarEspecificaciones() {
 
     const query = encodeURIComponent(`${marca} ${modelo} especificaciones tecnicas datasheet`.trim());
     window.open(`https://www.google.com/search?q=${query}`, '_blank');
-    
-    // Ejecutar además la búsqueda automática Cache-Aside
+
+    // Cargar sugerencias desde el catálogo interno (Cache-Aside) en el panel izquierdo
     verificarPlantillaExistente(true);
+    // Buscar especificaciones en la web con Firecrawl en el panel derecho
+    buscarCaracteristicasWeb();
+}
+
+// ============================================================
+// Panel derecho: Especificaciones de la web (Firecrawl)
+// ============================================================
+
+let webSpecsCache = [];
+
+function buscarCaracteristicasWeb() {
+    const marca = (document.getElementById('ft-marca').value || '').trim();
+    const modelo = (document.getElementById('ft-modelo').value || '').trim();
+    const panel = document.getElementById('ft-caracteristicas-web');
+    if (!panel) return;
+
+    if (!marca && !modelo) {
+        panel.innerHTML = '<p class="form-error">Ingrese la marca y/o modelo para buscar en la web.</p>';
+        return;
+    }
+
+    panel.innerHTML = '<p class="text-sm">⏳ Buscando especificaciones en la web con Firecrawl…</p>';
+
+    const q = new URLSearchParams({ marca, modelo });
+    fetch(`/api/catalogos/caracteristicas-web?${q.toString()}`)
+        .then(r => {
+            if (!r.ok) {
+                return r.text().then(t => { throw new Error(`HTTP ${r.status}: ${t || r.statusText}`); });
+            }
+            return r.json();
+        })
+        .then(res => {
+            if (res.error) {
+                panel.innerHTML = `<p class="form-error">${res.error}</p>`;
+                return;
+            }
+            const specs = res.caracteristicas || [];
+            webSpecsCache = specs;
+
+            const esFirecrawl = res.fuente === 'firecrawl';
+            const badge = esFirecrawl
+                ? '<span class="badge badge-ok">🌐 Firecrawl · web real del fabricante</span>'
+                : '<span class="badge badge-warn">🔍 Búsqueda básica (sin Firecrawl)</span>';
+
+            if (specs.length === 0) {
+                panel.innerHTML = `${badge}<p class="text-muted text-sm mt-2">No se encontraron especificaciones en la web para este modelo.</p>` +
+                    (esFirecrawl ? '' :
+                    '<p class="text-sm mt-2">💡 Para obtener las specs reales de <b>cualquier marca/modelo</b> (la web del fabricante usa JavaScript), configura una API key gratuita de Firecrawl en el archivo <code>.env</code> (<code>FIRECRAWL_API_KEY=...</code>) y reinicia el servidor.</p>');
+                return;
+            }
+
+            let html = `${badge}<div class="mt-2"></div>`;
+            html += `<button type="button" class="btn btn-sm btn-success mb-2" onclick="copiarTodasWeb()">➕ Copiar todas al panel izquierdo</button>`;
+            html += '<div class="char-web-list">';
+            specs.forEach((c, idx) => {
+                const nombre = (c.nombre || '').replace(/"/g, '&quot;');
+                const valor = (c.valor || '').replace(/"/g, '&quot;');
+                html += `
+                    <div class="char-web-row">
+                        <div class="char-web-info">
+                            <span class="char-name">${nombre}:</span>
+                            <span class="char-value">${valor}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="copiarWeb(${idx})" title="Copiar al panel izquierdo">➕</button>
+                    </div>`;
+            });
+            html += '</div>';
+            panel.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Error buscando en la web:', err);
+            panel.innerHTML = '<p class="form-error">No se pudo consultar la web. Verifique conexión e inicio de sesión, o revise la consola del servidor.</p>';
+        });
+}
+
+function copiarWeb(idx) {
+    const c = webSpecsCache[idx];
+    if (c) agregarFilaCaracteristica(c.nombre || '', c.valor || '');
+}
+
+function copiarTodasWeb() {
+    webSpecsCache.forEach(c => agregarFilaCaracteristica(c.nombre || '', c.valor || ''));
 }
 
 // ============================================================
@@ -601,6 +683,10 @@ function renderCaracteristicasEditables(chars, origenInfo) {
 }
 
 function agregarCaracteristicaFT() {
+    agregarFilaCaracteristica('', '');
+}
+
+function agregarFilaCaracteristica(nombre = '', valor = '') {
     const container = document.getElementById('ft-caracteristicas-list');
     if (!container) return;
 
@@ -617,10 +703,10 @@ function agregarCaracteristicaFT() {
     row.className = 'char-edit-row';
     row.id = `char-row-${idx}`;
     row.innerHTML = `
-        <input type="text" class="form-control char-edit-nombre" 
-               placeholder="Nombre (ej: Pantalla)">
-        <input type="text" class="form-control char-edit-valor" 
-               placeholder="Valor (ej: 14 pulgadas IPS)">
+        <input type="text" class="form-control char-edit-nombre"
+               value="${nombre.replace(/"/g, '&quot;')}" placeholder="Nombre (ej: Procesador)">
+        <input type="text" class="form-control char-edit-valor"
+               value="${valor.replace(/"/g, '&quot;')}" placeholder="Valor verificado">
         <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" title="Quitar">✖</button>`;
     grid.appendChild(row);
     row.querySelector('.char-edit-nombre').focus();

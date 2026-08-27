@@ -3,6 +3,7 @@ Rutas de catálogos de apoyo del Sistema OGTI.
 Proveedores, Responsables, Dependencias y Tipos de Bien.
 """
 from flask import Blueprint, request, jsonify
+import os
 from services.db import query, execute
 from routes.auth import login_required
 
@@ -400,6 +401,31 @@ def buscar_modelo_cache_aside():
         'fuente': 'WEB',
         'caracteristicas': specs_web,
         'mensaje': '🌐 Sugerido desde la web — verificar contra el equipo físico'
+    })
+
+
+@catalogos_bp.route('/api/catalogos/caracteristicas-web', methods=['GET'])
+@login_required
+def caracteristicas_web():
+    """
+    Busca en la web (Firecrawl, con respaldo DuckDuckGo) las especificaciones
+    técnicas a partir de la marca y modelo del producto. No usa caché: siempre
+    consulta la web para listar las características del fabricante.
+    """
+    from services.firecrawl_service import buscar_caracteristicas_web
+
+    marca = (request.args.get('marca') or '').strip()
+    modelo = (request.args.get('modelo') or '').strip()
+
+    if not marca and not modelo:
+        return jsonify({'error': 'Ingrese al menos la marca o el modelo'}), 400
+
+    specs = buscar_caracteristicas_web(marca, modelo)
+    return jsonify({
+        'marca': marca,
+        'modelo': modelo,
+        'fuente': 'firecrawl' if os.environ.get('FIRECRAWL_API_KEY') else 'web-fallback',
+        'caracteristicas': specs
     })
 
 

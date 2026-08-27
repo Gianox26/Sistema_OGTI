@@ -9,6 +9,12 @@ import os
 from flask import Flask
 from config import Config
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 # Importar blueprints
 from routes.auth import auth_bp
 from routes.catalogos import catalogos_bp

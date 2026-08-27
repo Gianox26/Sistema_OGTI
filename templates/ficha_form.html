@@ -182,25 +182,47 @@
     <div class="card hidden" id="paso-caracteristicas">
         <div class="card-header">
             <h3 class="card-title">⚙️ Características Técnicas del Bien Recibido</h3>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="buscarEspecificaciones()" title="Buscar en Google">
-                🔍 Buscar specs online
+            <button type="button" class="btn btn-sm btn-secondary" onclick="buscarEspecificaciones()" title="Buscar en Google y en la web">
+                🔍 Buscar specs
             </button>
         </div>
         <div class="card-body">
             <div class="alert alert-info">
-                ℹ️ Las características de la ET se cargaron automáticamente. Puede <strong>editar los valores</strong> según lo que recibió físicamente, o <strong>agregar nuevas</strong> características.
-                Use el botón 🔍 para abrir una búsqueda en Google con la marca y modelo.
+                ℹ️ A la <strong>izquierda</strong> puede <strong>editar las características</strong> según el bien que recibió físicamente (se cargan automáticamente desde la ET).
+                A la <strong>derecha</strong>, <strong>Firecrawl</strong> busca en la web las especificaciones del fabricante a partir de la <strong>marca y modelo</strong>; use ➕ para copiarlas al panel izquierdo.
             </div>
-            <div id="ft-caracteristicas-list">
-                <p class="text-muted text-sm">Seleccione un ítem para cargar las características.</p>
-            </div>
-            <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="agregarCaracteristicaFT()">
-                    ➕ Agregar característica
-                </button>
-                <button type="button" class="btn btn-sm btn-success" onclick="guardarComoPlantilla()">
-                    💾 Guardar como plantilla para este modelo
-                </button>
+
+            <div class="ficha-dual">
+                <!-- Panel izquierdo: edición manual -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h4>📝 Características del bien recibido</h4>
+                    </div>
+                    <div id="ft-caracteristicas-list">
+                        <p class="text-muted text-sm">Seleccione un ítem para cargar las características.</p>
+                    </div>
+                    <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="agregarCaracteristicaFT()">
+                            ➕ Agregar característica
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" onclick="guardarComoPlantilla()">
+                            💾 Guardar como plantilla
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel derecho: web (Firecrawl) -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h4>🌐 Especificaciones de la web (Firecrawl)</h4>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="buscarCaracteristicasWeb()" title="Buscar en la web">
+                            🔍 Buscar en web
+                        </button>
+                    </div>
+                    <div id="ft-caracteristicas-web">
+                        <p class="text-muted text-sm">Ingrese marca y modelo y presione 🔍 para listar las especificaciones desde la web.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
