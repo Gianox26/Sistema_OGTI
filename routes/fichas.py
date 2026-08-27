@@ -26,6 +26,33 @@ def normalizar_serie(serie):
     return serie
 
 
+def _actualizar_catalogo_modelo(marca, modelo, caracteristicas):
+    """
+    Guarda o actualiza el modelo en catalogo_modelos marcándolo como verificado = TRUE
+    una vez que el operador guarda o finaliza la ficha.
+    """
+    m = (marca or '').strip().upper()
+    mod = (modelo or '').strip().upper()
+    if not m or not mod or not caracteristicas:
+        return
+    try:
+        execute(
+            """
+            INSERT INTO catalogo_modelos (marca, modelo, caracteristicas, fuente, verificado, fecha_actualizacion)
+            VALUES (%s, %s, %s::jsonb, 'MANUAL', TRUE, NOW())
+            ON CONFLICT (marca, modelo)
+            DO UPDATE SET
+                caracteristicas = EXCLUDED.caracteristicas,
+                verificado = TRUE,
+                fecha_actualizacion = NOW()
+            """,
+            (m, mod, json.dumps(caracteristicas))
+        )
+    except Exception as e:
+        print(f"Error actualizando catalogo_modelos: {e}")
+
+
+
 # ============================================================
 # Páginas HTML
 # ============================================================
@@ -137,7 +164,7 @@ def crear_ficha():
     """
     data = request.get_json()
 
-    campos_requeridos = ['especificacion_id', 'item_id', 'numero_serie']
+    campos_requeridos = ['especificacion_id', 'item_id']
     for campo in campos_requeridos:
         if not data.get(campo):
             return jsonify({'error': f'El campo "{campo}" es obligatorio'}), 400
@@ -166,8 +193,9 @@ def crear_ficha():
     if not item:
         return jsonify({'error': 'El ítem no pertenece a esta Especificación Técnica'}), 400
 
-    # Normalizar número de serie
-    serie_normalizada = normalizar_serie(data['numero_serie'])
+    # Normalizar número de serie (puede ser vacío si el bien no lo tiene)
+    serie_raw = data.get('numero_serie', '').strip()
+    serie_normalizada = normalizar_serie(serie_raw) if serie_raw else None
 
     # Año actual para la ficha
     anio_actual = datetime.now().year
@@ -178,7 +206,7 @@ def crear_ficha():
             INSERT INTO fichas_tecnicas
                 (anio, especificacion_id, item_id,
                  marca, modelo, color, numero_serie, estado_fisico,
-                 observaciones, carta_levantamiento,
+                 observaciones, carta_levantamiento, guia_remision,
                  proveedor_ruc, proveedor_razon, proveedor_direccion,
                  proveedor_telefono, proveedor_correo,
                  responsable_id,
@@ -187,11 +215,11 @@ def crear_ficha():
                  creado_por)
             VALUES (%s, %s, %s,
                     %s, %s, %s, %s, %s,
-                    %s, %s,
+                    %s, %s, %s,
                     %s, %s, %s, %s, %s,
                     %s,
                     %s, %s, %s, %s,
-                    %s::jsonb, '{}'::jsonb,
+                    %s::jsonb, %s::jsonb,
                     %s)
             RETURNING id, numero_serie, estado
             """,
@@ -201,9 +229,10 @@ def crear_ficha():
                 data.get('modelo', '').strip(),
                 data.get('color', '').strip(),
                 serie_normalizada,
-                data.get('estado_fisico', ''),
+                data.get('estado_fisico') or 'NUEVO',
                 data.get('observaciones', '').strip(),
                 data.get('carta_levantamiento', '').strip(),
+                data.get('guia_remision', '').strip(),
                  # Datos del proveedor: se envían desde el formulario (editables)
                  data.get('proveedor_ruc') or None,
                  data.get('proveedor_razon') or None,
@@ -218,10 +247,16 @@ def crear_ficha():
                  data.get('garantia') or None,
                 json.dumps(data.get('caracteristicas_verificadas',
                                     item.get('caracteristicas', []))),
+                json.dumps(data.get('checklist', {})),
                 session['usuario_id'],
             ),
             returning=True
         )
+        
+        # Actualizar catálogo de modelos (Cache-Aside: marcar verificado = True)
+        chars = data.get('caracteristicas_verificadas', item.get('caracteristicas', []))
+        _actualizar_catalogo_modelo(data.get('marca'), data.get('modelo'), chars)
+
         return jsonify(resultado), 201
 
     except IntegrityError as e:
@@ -255,7 +290,7 @@ def actualizar_ficha(id):
     # Construir UPDATE dinámico solo para campos enviados
     campos_permitidos = [
         'marca', 'modelo', 'color', 'numero_serie', 'estado_fisico',
-        'observaciones', 'carta_levantamiento', 'responsable_id',
+        'observaciones', 'carta_levantamiento', 'guia_remision', 'responsable_id',
         'proveedor_ruc', 'proveedor_razon', 'proveedor_direccion',
         'proveedor_telefono', 'proveedor_correo',
         'orden_compra', 'costo', 'fecha_adquisicion', 'garantia'
@@ -323,28 +358,20 @@ def finalizar_ficha(id):
         return jsonify({'error': 'La marca es obligatoria'}), 400
     if not ft.get('modelo'):
         return jsonify({'error': 'El modelo es obligatorio'}), 400
-    if not ft.get('estado_fisico'):
-        return jsonify({'error': 'El estado físico es obligatorio'}), 400
 
-    # Validar checklist completo (6 casillas obligatorias)
+    # Validar checklist completo (todas las casillas verificadas deben estar en true)
     checklist = ft.get('checklist', {})
     if isinstance(checklist, str):
         checklist = json.loads(checklist)
 
-    casillas_requeridas = [
-        'marca_coincide',
-        'modelo_coincide',
-        'serie_ingresada',
-        'estado_fisico_revisado',
-        'caracteristicas_verificadas',
-        'datos_proveedor_correctos',
-    ]
+    if not checklist:
+        return jsonify({'error': 'El checklist de verificación no ha sido completado'}), 400
 
-    casillas_faltantes = [c for c in casillas_requeridas if not checklist.get(c)]
-    if casillas_faltantes:
+    casillas_sin_marcar = [k for k, v in checklist.items() if not v]
+    if casillas_sin_marcar:
         return jsonify({
-            'error': 'El checklist de verificación no está completo',
-            'casillas_faltantes': casillas_faltantes
+            'error': 'Quedan casillas del checklist sin marcar',
+            'casillas_faltantes': casillas_sin_marcar
         }), 400
 
     # Asignar correlativo atómico
@@ -363,6 +390,13 @@ def finalizar_ficha(id):
         """,
         (numero, session['usuario_id'], id)
     )
+
+    # Marcar modelo como verificado en catalogo_modelos
+    if ft.get('marca') and ft.get('modelo'):
+        chars = ft.get('caracteristicas_verificadas', [])
+        if isinstance(chars, str):
+            chars = json.loads(chars)
+        _actualizar_catalogo_modelo(ft.get('marca'), ft.get('modelo'), chars)
 
     return jsonify({
         'message': 'Ficha Técnica finalizada correctamente',
@@ -406,6 +440,37 @@ def anular_ficha(id):
     )
 
     return jsonify({'message': 'Ficha Técnica anulada', 'id': id})
+
+
+@fichas_bp.route('/api/fichas/<int:id>/reabrir', methods=['POST'])
+@login_required
+def reabrir_ficha(id):
+    """
+    Reabre una Ficha Técnica FINALIZADA para permitir ediciones.
+    Conserva el número correlativo. Cambia el estado a BORRADOR.
+    """
+    ft = query(
+        "SELECT estado FROM fichas_tecnicas WHERE id = %s",
+        (id,),
+        fetchone=True
+    )
+    if not ft:
+        return jsonify({'error': 'Ficha Técnica no encontrada'}), 404
+    if ft['estado'] != 'FINALIZADA':
+        return jsonify({'error': 'Solo se puede reabrir una Ficha en estado FINALIZADA'}), 400
+
+    execute(
+        """
+        UPDATE fichas_tecnicas
+        SET estado = 'BORRADOR',
+            finalizado_por = NULL,
+            fecha_finalizacion = NULL
+        WHERE id = %s
+        """,
+        (id,)
+    )
+
+    return jsonify({'message': 'Ficha reabierta para edición', 'id': id})
 
 
 @fichas_bp.route('/api/fichas/carga-masiva', methods=['POST'])
@@ -553,7 +618,8 @@ def descargar_documento_ft(id):
                et.numero_pedido, et.fecha_pedido,
                et.denominacion_adquisicion AS denominacion_adquisicion,
                r.nombre AS responsable_nombre, r.cargo AS responsable_cargo,
-               d.nombre AS dependencia_nombre
+               r.telefono AS responsable_telefono, r.correo AS responsable_correo,
+               d.nombre AS dependencia_nombre, d.edificio AS edificio_nombre
         FROM fichas_tecnicas ft
         JOIN items_especificacion ie ON ft.item_id = ie.id
         JOIN tipos_bien tb ON ie.tipo_bien_id = tb.id
@@ -578,34 +644,67 @@ def descargar_documento_ft(id):
     if isinstance(caracteristicas, str):
         caracteristicas = json.loads(caracteristicas)
 
+    # Construir función auxiliar: campo vacío => '...'
+    def v(val, default='...'):
+        """Devuelve el valor o '...' si está vacío."""
+        if val is None or (isinstance(val, str) and val.strip() == ''):
+            return default
+        return val
+
+    # Auto-formatear carta de almacén
+    carta_raw = ft.get('carta_levantamiento', '') or ''
+    anio_actual = ft.get('anio', datetime.now().year)
+    if carta_raw and not carta_raw.upper().startswith('N°'):
+        carta_formateada = f"N° Carta {carta_raw}-{anio_actual}"
+    else:
+        carta_formateada = carta_raw
+
+    # --- Mapeo EXACTO de variables de la plantilla ficha_tecnica_tpl.docx ---
     datos = {
-        'numero_ficha': correlativo,
-        'bien_descripcion': ft['bien_descripcion'],
-        'tipo_bien': ft['tipo_bien_nombre'],
-        'marca': ft['marca'],
-        'modelo': ft['modelo'],
-        'color': ft.get('color', ''),
-        'numero_serie': ft['numero_serie'],
-        'estado_fisico': ft.get('estado_fisico', ''),
-        'observaciones': ft.get('observaciones', ''),
-        'carta_levantamiento': ft.get('carta_levantamiento', ''),
+        # Datos generales
+        'numero_correlativo': correlativo,
+        'bien_equipo': v(ft.get('tipo_bien_nombre')),
+        'descripcion_bien': v(ft.get('bien_descripcion')),
+
+        # Marca, modelo, color, serie
+        'marca': v(ft.get('marca')),
+        'modelo': v(ft.get('modelo')),
+        'color': v(ft.get('color')),
+        'numero_serie': v(ft.get('numero_serie'), 'SIN SERIE'),
+        'estado_fisico': v(ft.get('estado_fisico'), 'NUEVO'),
+
+        # Carta y guía
+        'carta_levantamiento': v(carta_formateada),
+        'comprobante_guia': v(ft.get('guia_remision')),
+
+        # Proveedor
+        'proveedor_razon_social': v(ft.get('proveedor_razon')),
+        'proveedor_direccion': v(ft.get('proveedor_direccion')),
+        'proveedor_telefono': v(ft.get('proveedor_telefono')),
+        'proveedor_email': v(ft.get('proveedor_correo')),
+
+        # Adquisición
+        'pedido_compra': v(ft.get('numero_pedido')),
+        'fecha_pedido': ft['fecha_pedido'].strftime('%d/%m/%Y') if ft.get('fecha_pedido') else '...',
+        'orden_compra': v(ft.get('orden_compra')),
+        'fecha_orden': ft['fecha_adquisicion'].strftime('%d/%m/%Y') if ft.get('fecha_adquisicion') else '...',
+        'fecha_compra': ft['fecha_adquisicion'].strftime('%d/%m/%Y') if ft.get('fecha_adquisicion') else '...',
+        'costo': v(str(ft['costo']) if ft.get('costo') else None),
+        'garantia': v(ft.get('garantia')),
+
+        # Responsable
+        'responsable_nombre': v(ft.get('responsable_nombre')),
+        'responsable_cargo': v(ft.get('responsable_cargo')),
+        'responsable_telefono': v(ft.get('responsable_telefono')),
+        'responsable_email': v(ft.get('responsable_correo')),
+        'dependencia': v(ft.get('dependencia_nombre')),
+        'edificio': v(ft.get('edificio_nombre')),
+
+        # Observaciones
+        'observaciones': v(ft.get('observaciones')),
+
+        # Características (para el bloque procesado con python-docx)
         'caracteristicas': caracteristicas,
-        'proveedor_ruc': ft.get('proveedor_ruc', ''),
-        'proveedor_razon_social': ft.get('proveedor_razon', ''),
-        'proveedor_direccion': ft.get('proveedor_direccion', ''),
-        'proveedor_telefono': ft.get('proveedor_telefono', ''),
-        'proveedor_correo': ft.get('proveedor_correo', ''),
-        'denominacion_adquisicion': ft.get('denominacion_adquisicion', ''),
-        'responsable_nombre': ft.get('responsable_nombre', ''),
-        'responsable_cargo': ft.get('responsable_cargo', ''),
-        'dependencia': ft.get('dependencia_nombre', ''),
-        'numero_pedido': ft['numero_pedido'],
-        'fecha_pedido': ft['fecha_pedido'].strftime('%d/%m/%Y') if ft.get('fecha_pedido') else '',
-        'fecha_finalizacion': ft['fecha_finalizacion'].strftime('%d/%m/%Y') if ft.get('fecha_finalizacion') else '',
-        'orden_compra': ft.get('orden_compra', ''),
-        'costo': ft.get('costo', ''),
-        'fecha_adquisicion': ft['fecha_adquisicion'].strftime('%d/%m/%Y') if ft.get('fecha_adquisicion') else '',
-        'garantia': ft.get('garantia', ''),
     }
 
     try:

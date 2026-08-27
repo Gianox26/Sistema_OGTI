@@ -85,8 +85,13 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Modelo <span class="req">*</span></label>
-                    <input type="text" id="ft-modelo" class="form-control"
-                           placeholder="Ej: VISSION VM1470">
+                    <div class="gap-row">
+                        <input type="text" id="ft-modelo" class="form-control flex-1"
+                               placeholder="Ej: VISSION VM1470">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="buscarEspecificaciones()" title="Buscar especificaciones técnicas en Google">
+                            🔍 Buscar specs
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Color</label>
@@ -103,36 +108,54 @@
                     <span id="serie-feedback" class="form-help"></span>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Estado Físico <span class="req">*</span></label>
-                    <select id="ft-estado-fisico" class="form-control">
-                        <option value="NUEVO" selected>Nuevo</option>
-                        <option value="BUENO">Bueno</option>
-                        <option value="REGULAR">Regular</option>
-                        <option value="MALO">Malo</option>
-                    </select>
+                    <label class="form-label">Nombre de Carta de Almacén</label>
+                    <input type="text" id="ft-carta" class="form-control"
+                           placeholder="Ej: CARTA-ALM-2026-0045">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">N° Carta de Levantamiento</label>
-                    <input type="text" id="ft-carta" class="form-control">
+                    <label class="form-label">Guía de Remisión del Proveedor</label>
+                    <input type="text" id="ft-guia-remision" class="form-control"
+                           placeholder="Ej: GR-001-00012345">
                 </div>
 
                 <div class="form-group full-width">
-                    <label class="form-label">Datos del Proveedor (editables — se copian de la ET)</label>
+                    <label class="form-label" style="font-weight:700; font-size:0.95rem;">🏬 Datos del Proveedor</label>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Nombre completo</label>
-                    <input type="text" id="ft-proveedor-nombre" class="form-control"
-                           placeholder="Nombre completo del proveedor (se copia de la ET)">
+                    <label class="form-label">Proveedor <span class="req">*</span></label>
+                    <div class="gap-row">
+                        <select id="ft-proveedor-id" class="form-control flex-1" onchange="cargarDatosProveedor()">
+                            <option value="">— Seleccione proveedor —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="abrirModalProveedor()">
+                            + Nuevo
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Dirección del Proveedor</label>
-                    <input type="text" id="ft-proveedor-dir" class="form-control"
-                           placeholder="Se copia de la ET; editable si hubo cambio">
+                    <label class="form-label">RUC</label>
+                    <input type="text" id="ft-proveedor-ruc" class="form-control" readonly
+                           placeholder="Se autocompleta al seleccionar proveedor">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Teléfono del Proveedor</label>
-                    <input type="text" id="ft-proveedor-tel" class="form-control"
-                           placeholder="Se copia de la ET; editable si hubo cambio">
+                    <label class="form-label">Razón Social</label>
+                    <input type="text" id="ft-proveedor-nombre" class="form-control" readonly
+                           placeholder="Se autocompleta al seleccionar proveedor">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Dirección</label>
+                    <input type="text" id="ft-proveedor-dir" class="form-control" readonly
+                           placeholder="Se autocompleta al seleccionar proveedor">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" id="ft-proveedor-tel" class="form-control" readonly
+                           placeholder="Se autocompleta al seleccionar proveedor">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Correo</label>
+                    <input type="text" id="ft-proveedor-correo" class="form-control" readonly
+                           placeholder="Se autocompleta al seleccionar proveedor">
                 </div>
 
                 <div class="form-group">
@@ -151,6 +174,33 @@
                     <textarea id="ft-observaciones" class="form-control" rows="2"
                               placeholder="Observaciones sobre el estado o condición del bien"></textarea>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 3.5a: Características Técnicas Verificadas (editables) -->
+    <div class="card hidden" id="paso-caracteristicas">
+        <div class="card-header">
+            <h3 class="card-title">⚙️ Características Técnicas del Bien Recibido</h3>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="buscarEspecificaciones()" title="Buscar en Google">
+                🔍 Buscar specs online
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                ℹ️ Las características de la ET se cargaron automáticamente. Puede <strong>editar los valores</strong> según lo que recibió físicamente, o <strong>agregar nuevas</strong> características.
+                Use el botón 🔍 para abrir una búsqueda en Google con la marca y modelo.
+            </div>
+            <div id="ft-caracteristicas-list">
+                <p class="text-muted text-sm">Seleccione un ítem para cargar las características.</p>
+            </div>
+            <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="agregarCaracteristicaFT()">
+                    ➕ Agregar característica
+                </button>
+                <button type="button" class="btn btn-sm btn-success" onclick="guardarComoPlantilla()">
+                    💾 Guardar como plantilla para este modelo
+                </button>
             </div>
         </div>
     </div>
@@ -186,43 +236,21 @@
         </div>
     </div>
 
-    <!-- Paso 4: Checklist de verificación -->
+    <!-- Paso 4: Checklist de verificación basado en características de la ET -->
     <div class="card hidden" id="paso-checklist">
         <div class="card-header">
-            <h3 class="card-title">✅ Checklist de Verificación Obligatorio</h3>
+            <h3 class="card-title">✅ Checklist de Verificación de Características</h3>
         </div>
         <div class="card-body">
             <div class="alert alert-warning">
-                ⚠️ Marque cada casilla solo después de haber verificado físicamente el bien recibido.
-                El botón "Finalizar" se habilitará únicamente cuando las 6 casillas estén marcadas.
+                ⚠️ Verifique físicamente cada característica del bien recibido según lo especificado en la ET.
+                El botón "Finalizar" se habilitará cuando todas las casillas estén marcadas.
             </div>
             <div class="checklist">
-                <div class="checklist-title">🔍 Verificación de Coherencia</div>
-                <div class="checklist-grid">
-                    <div class="check-item" id="chk-marca-item" onclick="toggleCheck('marca_coincide')">
-                        <input type="checkbox" id="chk-marca_coincide" onchange="actualizarChecklist()">
-                        <label for="chk-marca_coincide">¿La marca coincide con la Especificación Técnica?</label>
-                    </div>
-                    <div class="check-item" id="chk-modelo-item" onclick="toggleCheck('modelo_coincide')">
-                        <input type="checkbox" id="chk-modelo_coincide" onchange="actualizarChecklist()">
-                        <label for="chk-modelo_coincide">¿El modelo coincide con la Especificación Técnica?</label>
-                    </div>
-                    <div class="check-item" id="chk-serie-item" onclick="toggleCheck('serie_ingresada')">
-                        <input type="checkbox" id="chk-serie_ingresada" onchange="actualizarChecklist()">
-                        <label for="chk-serie_ingresada">¿El número de serie fue ingresado?</label>
-                    </div>
-                    <div class="check-item" id="chk-estado-item" onclick="toggleCheck('estado_fisico_revisado')">
-                        <input type="checkbox" id="chk-estado_fisico_revisado" onchange="actualizarChecklist()">
-                        <label for="chk-estado_fisico_revisado">¿El estado físico fue revisado?</label>
-                    </div>
-                    <div class="check-item" id="chk-caract-item" onclick="toggleCheck('caracteristicas_verificadas')">
-                        <input type="checkbox" id="chk-caracteristicas_verificadas" onchange="actualizarChecklist()">
-                        <label for="chk-caracteristicas_verificadas">¿Las características técnicas fueron verificadas físicamente?</label>
-                    </div>
-                    <div class="check-item" id="chk-prov-item" onclick="toggleCheck('datos_proveedor_correctos')">
-                        <input type="checkbox" id="chk-datos_proveedor_correctos" onchange="actualizarChecklist()">
-                        <label for="chk-datos_proveedor_correctos">¿Los datos del proveedor son correctos?</label>
-                    </div>
+                <div class="checklist-title">🔍 Verificación de Características Técnicas</div>
+                <div class="checklist-grid" id="checklist-caracteristicas">
+                    <!-- Se genera dinámicamente desde ficha.js basado en las características de la ET -->
+                    <p class="text-muted text-sm">Seleccione un ítem para cargar el checklist de verificación.</p>
                 </div>
             </div>
         </div>
@@ -276,6 +304,44 @@
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="cerrarModal('modal-responsable')">Cancelar</button>
             <button class="btn btn-primary" onclick="guardarResponsable()">Guardar Responsable</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Nuevo Proveedor -->
+<div class="modal-overlay" id="modal-proveedor">
+    <div class="modal" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>🏬 Registrar Nuevo Proveedor</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modal-proveedor')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="prov-ruc">RUC <span class="req">*</span></label>
+                    <input type="text" id="prov-ruc" class="form-control" placeholder="11 dígitos" maxlength="11">
+                </div>
+                <div class="form-group flex-1">
+                    <label class="form-label" for="prov-razon">Razón Social <span class="req">*</span></label>
+                    <input type="text" id="prov-razon" class="form-control" placeholder="Ej: Importaciones Tech S.A.C.">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label" for="prov-direccion">Dirección</label>
+                    <input type="text" id="prov-direccion" class="form-control" placeholder="Ej: Av. Real 123">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="prov-telefono">Teléfono</label>
+                    <input type="text" id="prov-telefono" class="form-control" placeholder="Ej: 987654321">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="prov-correo">Correo electrónico</label>
+                    <input type="email" id="prov-correo" class="form-control" placeholder="ventas@empresa.com">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-proveedor')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarProveedor()">Guardar Proveedor</button>
         </div>
     </div>
 </div>

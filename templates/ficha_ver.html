@@ -29,6 +29,9 @@
                class="btn btn-primary">
                 📥 Descargar Word
             </a>
+            <button type="button" class="btn btn-secondary" onclick="reabrirFicha({{ ft.id }})">
+                🔓 Reabrir para edición
+            </button>
             {% endif %}
             <a href="{{ url_for('fichas.pagina_lista') }}" class="btn btn-secondary">
                 ← Volver
@@ -79,8 +82,12 @@
                     <input type="text" class="form-control" value="{{ ft.estado_fisico or '-' }}" readonly>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">N° Carta de Levantamiento</label>
+                    <label class="form-label">Nombre de Carta de Almacén</label>
                     <input type="text" class="form-control" value="{{ ft.carta_levantamiento or '-' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Guía de Remisión del Proveedor</label>
+                    <input type="text" class="form-control" value="{{ ft.guia_remision or '-' }}" readonly>
                 </div>
                 <div class="form-group full-width">
                     <label class="form-label">Observaciones</label>
@@ -201,30 +208,15 @@
         <div class="card-body">
             {% set cl = ft.checklist if ft.checklist is mapping else {} %}
             <div class="checklist-grid">
-                <div class="check-item {{ 'checked' if cl.get('marca_coincide') }}">
-                    <input type="checkbox" {{ 'checked' if cl.get('marca_coincide') }} disabled>
-                    <label>¿La marca coincide con la ET?</label>
+                {% for key, value in cl.items() %}
+                <div class="check-item {{ 'checked' if value }}">
+                    <input type="checkbox" {{ 'checked' if value }} disabled>
+                    <label>{{ key.replace('_', ' ').capitalize() }}</label>
                 </div>
-                <div class="check-item {{ 'checked' if cl.get('modelo_coincide') }}">
-                    <input type="checkbox" {{ 'checked' if cl.get('modelo_coincide') }} disabled>
-                    <label>¿El modelo coincide con la ET?</label>
-                </div>
-                <div class="check-item {{ 'checked' if cl.get('serie_ingresada') }}">
-                    <input type="checkbox" {{ 'checked' if cl.get('serie_ingresada') }} disabled>
-                    <label>¿El número de serie fue ingresado?</label>
-                </div>
-                <div class="check-item {{ 'checked' if cl.get('estado_fisico_revisado') }}">
-                    <input type="checkbox" {{ 'checked' if cl.get('estado_fisico_revisado') }} disabled>
-                    <label>¿El estado físico fue revisado?</label>
-                </div>
-                <div class="check-item {{ 'checked' if cl.get('caracteristicas_verificadas') }}">
-                    <input type="checkbox" {{ 'checked' if cl.get('caracteristicas_verificadas') }} disabled>
-                    <label>¿Las características fueron verificadas?</label>
-                </div>
-                <div class="check-item {{ 'checked' if cl.get('datos_proveedor_correctos') }}">
-                    <input type="checkbox" {{ 'checked' if cl.get('datos_proveedor_correctos') }} disabled>
-                    <label>¿Los datos del proveedor son correctos?</label>
-                </div>
+                {% endfor %}
+                {% if not cl %}
+                <p class="text-muted text-sm">Sin checklist registrado</p>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -263,5 +255,26 @@
             </div>
         </div>
     </div>
+
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function reabrirFicha(fichaId) {
+    if (!confirm('¿Reabrir esta Ficha Técnica para edición? Se conservará el número correlativo.')) return;
+
+    fetch(`/api/fichas/${fichaId}/reabrir`, { method: 'POST' })
+        .then(r => r.json().then(data => ({ status: r.status, data })))
+        .then(({ status, data }) => {
+            if (status >= 400) {
+                alert(data.error || 'Error al reabrir');
+                return;
+            }
+            alert('Ficha reabierta para edición. Puede modificar los datos y volver a finalizarla.');
+            window.location.reload();
+        })
+        .catch(err => alert('Error de conexión'));
+}
+</script>
 {% endblock %}

@@ -280,6 +280,132 @@ def crear_actividad():
 
 
 # ============================================================
+# PLANTILLAS DE CARACTERÍSTICAS DE BIENES (por Marca y Modelo)
+# ============================================================
+
+import json
+
+@catalogos_bp.route('/api/plantillas-caracteristicas', methods=['POST'])
+@login_required
+def guardar_plantilla_caracteristicas():
+    """Guarda o actualiza una plantilla de características para un par marca + modelo."""
+    data = request.get_json()
+    marca = (data.get('marca') or '').strip().upper()
+    modelo = (data.get('modelo') or '').strip().upper()
+    caracteristicas = data.get('caracteristicas', [])
+
+    if not marca or not modelo:
+        return jsonify({'error': 'Marca y modelo son requeridos'}), 400
+
+    if not caracteristicas:
+        return jsonify({'error': 'Debe incluir al menos una característica'}), 400
+
+    resultado = execute(
+        """
+        INSERT INTO plantillas_caracteristicas (marca, modelo, caracteristicas)
+        VALUES (%s, %s, %s::jsonb)
+        ON CONFLICT (marca, modelo)
+        DO UPDATE SET caracteristicas = EXCLUDED.caracteristicas, fecha_creacion = NOW()
+        RETURNING id, marca, modelo, caracteristicas
+        """,
+        (marca, modelo, json.dumps(caracteristicas)),
+        returning=True
+    )
+    return jsonify(resultado), 200
+
+
+@catalogos_bp.route('/api/plantillas-caracteristicas/buscar', methods=['GET'])
+@login_required
+def buscar_plantilla_caracteristicas():
+    """Busca una plantilla de características guardada por marca y modelo."""
+    marca = (request.args.get('marca') or '').strip().upper()
+    modelo = (request.args.get('modelo') or '').strip().upper()
+
+    if not marca or not modelo:
+        return jsonify(None)
+
+    plantilla = query(
+        """
+        SELECT id, marca, modelo, caracteristicas, fecha_creacion
+        FROM plantillas_caracteristicas
+        WHERE UPPER(marca) = %s AND UPPER(modelo) = %s
+        """,
+        (marca, modelo),
+        fetchone=True
+    )
+    return jsonify(plantilla)
+
+
+@catalogos_bp.route('/api/catalogos/buscar-modelo', methods=['GET'])
+@login_required
+def buscar_modelo_cache_aside():
+    """
+    Patrón Cache-Aside:
+    1. Normaliza marca y modelo.
+    2. Consulta la base de datos (catalogo_modelos). Si existe, retorna al instante.
+    3. Si NO existe en BD, realiza una búsqueda automática en la web con Firecrawl.
+    4. Guarda el resultado en catalogo_modelos (fuente = 'WEB', verificado = False).
+    5. Retorna las características para que el usuario las revise y confirme.
+    """
+    from services.firecrawl_service import buscar_caracteristicas_web
+
+    marca = (request.args.get('marca') or '').strip().upper()
+    modelo = (request.args.get('modelo') or '').strip().upper()
+
+    if not marca or not modelo:
+        return jsonify({'error': 'Marca y modelo son requeridos'}), 400
+
+    # 1. Consulta en PostgreSQL (Cache Hit)
+    cat_item = query(
+        """
+        SELECT id, marca, modelo, caracteristicas, fuente, verificado
+        FROM catalogo_modelos
+        WHERE UPPER(marca) = %s AND UPPER(modelo) = %s
+        """,
+        (marca, modelo),
+        fetchone=True
+    )
+
+    if cat_item:
+        return jsonify({
+            'encontrado': True,
+            'origen': 'DATABASE',
+            'verificado': cat_item['verificado'],
+            'fuente': cat_item['fuente'],
+            'caracteristicas': cat_item['caracteristicas'],
+            'mensaje': 'Características cargadas desde el catálogo interno.' if cat_item['verificado']
+                       else 'Cargado desde borrador previo — verificar contra el equipo físico.'
+        })
+
+    # 2. Cache Miss → Búsqueda Web con Firecrawl
+    specs_web = buscar_caracteristicas_web(marca, modelo)
+
+    # 3. Guardar en catalogo_modelos como no verificado
+    try:
+        execute(
+            """
+            INSERT INTO catalogo_modelos (marca, modelo, caracteristicas, fuente, verificado)
+            VALUES (%s, %s, %s::jsonb, 'WEB', FALSE)
+            ON CONFLICT (marca, modelo) DO NOTHING
+            """,
+            (marca, modelo, json.dumps(specs_web))
+        )
+    except Exception as e:
+        print(f"Error guardando en catalogo_modelos: {e}")
+
+    return jsonify({
+        'encontrado': True,
+        'origen': 'WEB',
+        'verificado': False,
+        'fuente': 'WEB',
+        'caracteristicas': specs_web,
+        'mensaje': '🌐 Sugerido desde la web — verificar contra el equipo físico'
+    })
+
+
+
+
+# ============================================================
 # Renderizado de páginas HTML de catálogos
 # ============================================================
 

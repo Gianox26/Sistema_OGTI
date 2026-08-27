@@ -22,23 +22,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function cargarETExistente(et) {
     etId = et.id;
-    if (et.centro_costo_id) document.getElementById('centro_costo_id').value = et.centro_costo_id;
-    if (et.actividad_operativa_id) document.getElementById('actividad_operativa_id').value = et.actividad_operativa_id;
-    if (et.denominacion_adquisicion) document.getElementById('denominacion_adquisicion').value = et.denominacion_adquisicion;
-    if (et.numero_pedido) document.getElementById('numero_pedido').value = et.numero_pedido;
+    if (et.centro_costo_id && document.getElementById('centro_costo_id')) document.getElementById('centro_costo_id').value = et.centro_costo_id;
+    if (et.actividad_operativa_id && document.getElementById('actividad_operativa_id')) document.getElementById('actividad_operativa_id').value = et.actividad_operativa_id;
+    if (et.proveedor_id && document.getElementById('proveedor_id')) document.getElementById('proveedor_id').value = et.proveedor_id;
+    if (et.denominacion_adquisicion && document.getElementById('denominacion_adquisicion')) document.getElementById('denominacion_adquisicion').value = et.denominacion_adquisicion;
+    if (et.numero_pedido && document.getElementById('numero_pedido')) document.getElementById('numero_pedido').value = et.numero_pedido;
     if (et.meta_anio) {
         const partes = et.meta_anio.split('-');
-        document.getElementById('meta_codigo').value = partes[0] || '';
-        if (partes[1]) document.getElementById('anio_fiscal').value = partes[1];
+        if (document.getElementById('meta_codigo')) document.getElementById('meta_codigo').value = partes[0] || '';
+        if (partes[1] && document.getElementById('anio_fiscal')) document.getElementById('anio_fiscal').value = partes[1];
     }
-    if (et.fecha_pedido) {
+    if (et.fecha_pedido && document.getElementById('fecha_pedido')) {
         const fecha = new Date(et.fecha_pedido).toISOString().split('T')[0];
         document.getElementById('fecha_pedido').value = fecha;
     }
 
     // Mostrar sección de ítems
-    document.getElementById('seccion-items').classList.remove('hidden');
-    document.getElementById('btn-guardar-et').textContent = '🔄 Actualizar Datos del Pedido';
+    const secItems = document.getElementById('seccion-items');
+    if (secItems) secItems.classList.remove('hidden');
+    const btnGuardar = document.getElementById('btn-guardar-et');
+    if (btnGuardar) btnGuardar.textContent = '🔄 Actualizar Datos del Pedido';
     cargarItemsLista();
 }
 
@@ -73,6 +76,23 @@ function cargarActividades() {
                 opt.textContent = a.codigo + ' – ' + a.nombre;
                 sel.appendChild(opt);
             });
+        });
+}
+
+function cargarProveedores() {
+    return fetch('/api/proveedores')
+        .then(r => r.json())
+        .then(data => {
+            const sel = document.getElementById('proveedor_id');
+            if (sel) {
+                sel.innerHTML = '<option value="">— Seleccione proveedor (opcional) —</option>';
+                data.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.razon_social + ' (RUC: ' + p.ruc + ')';
+                    sel.appendChild(opt);
+                });
+            }
         });
 }
 
@@ -150,28 +170,39 @@ function guardarActividad() {
 // ============================================================
 
 function guardarET() {
-    const numero_pedido = document.getElementById('numero_pedido').value.trim();
-    const denominacion = document.getElementById('denominacion_adquisicion').value.trim();
-    const fecha = document.getElementById('fecha_pedido').value;
+    const numEl = document.getElementById('numero_pedido');
+    const denEl = document.getElementById('denominacion_adquisicion');
+    const fecEl = document.getElementById('fecha_pedido');
+    const provEl = document.getElementById('proveedor_id');
+    const ccEl = document.getElementById('centro_costo_id');
+    const actEl = document.getElementById('actividad_operativa_id');
+    const metaCodEl = document.getElementById('meta_codigo');
+    const anioEl = document.getElementById('anio_fiscal');
+
+    const numero_pedido = numEl ? numEl.value.trim() : '';
+    const denominacion = denEl ? denEl.value.trim() : '';
+    const fecha = fecEl ? fecEl.value : '';
+    const proveedor_id = (provEl && provEl.value) ? parseInt(provEl.value) : null;
 
     if (!denominacion) { alert('La denominación de la adquisición es obligatoria'); return; }
     if (!numero_pedido) { alert('El número de pedido es obligatorio'); return; }
     if (!/^\d+$/.test(numero_pedido)) { alert('El número de pedido debe contener solo dígitos'); return; }
     if (!fecha) { alert('La fecha del pedido es obligatoria'); return; }
 
-    const meta_codigo = document.getElementById('meta_codigo').value.trim();
-    const anio_fiscal = parseInt(document.getElementById('anio_fiscal').value) || 2026;
+    const meta_codigo = metaCodEl ? metaCodEl.value.trim() : '';
+    const anio_fiscal = (anioEl && parseInt(anioEl.value)) ? parseInt(anioEl.value) : 2026;
     const meta_anio = meta_codigo ? (meta_codigo + '-' + anio_fiscal) : '';
 
     const body = {
-        centro_costo_id: document.getElementById('centro_costo_id').value || null,
-        actividad_operativa_id: document.getElementById('actividad_operativa_id').value || null,
+        centro_costo_id: (ccEl && ccEl.value) ? parseInt(ccEl.value) : null,
+        actividad_operativa_id: (actEl && actEl.value) ? parseInt(actEl.value) : null,
         denominacion_adquisicion: denominacion,
         numero_pedido: numero_pedido,
         meta_codigo: meta_codigo,
         meta_anio: meta_anio,
         anio_fiscal: anio_fiscal,
         fecha_pedido: fecha,
+        proveedor_id: proveedor_id,
     };
 
     const url = etId ? ('/api/especificaciones/' + etId) : '/api/especificaciones';
@@ -182,12 +213,19 @@ function guardarET() {
     })
     .then(r => r.json().then(data => ({status: r.status, data})))
     .then(({status, data}) => {
-        if (status >= 400) { alert(data.error || 'Error al guardar'); return; }
+        if (status >= 400) {
+            alert(data.error || 'Error al guardar');
+            return;
+        }
         if (!etId && data.id) {
             etId = data.id;
         }
         alert('Datos del pedido guardados correctamente');
         document.getElementById('seccion-items').classList.remove('hidden');
+    })
+    .catch(err => {
+        console.error('Error al guardar ET:', err);
+        alert('Error de conexión al guardar');
     });
 }
 
@@ -387,6 +425,38 @@ function finalizarET() {
 // ============================================================
 // Modales y Preview de Imagen
 // ============================================================
+
+function abrirModalTipoBien() {
+    document.getElementById('modal-tipo-bien').classList.add('show');
+    document.getElementById('tb-nombre').value = '';
+    document.getElementById('tb-caracteristicas').value = '';
+}
+
+function guardarTipoBien() {
+    const nombre = document.getElementById('tb-nombre').value.trim();
+    if (!nombre) { alert('El nombre del tipo de bien es obligatorio'); return; }
+
+    // Parsear las características (una por línea)
+    const lineas = document.getElementById('tb-caracteristicas').value.trim().split('\n');
+    const caracteristicas_tipicas = lineas
+        .filter(l => l.trim())
+        .map(l => ({ nombre: l.trim(), valor_sugerido: '' }));
+
+    fetch('/api/tipos-bien', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ nombre, caracteristicas_tipicas }),
+    })
+    .then(r => r.json().then(data => ({status: r.status, data})))
+    .then(({status, data}) => {
+        if (status >= 400) { alert(data.error || 'Error al guardar tipo de bien'); return; }
+        cerrarModal('modal-tipo-bien');
+        cargarTiposBien().then(() => {
+            document.getElementById('item-tipo-bien').value = data.id;
+            cargarCaracteristicas();
+        });
+    });
+}
 
 function cerrarModal(id) {
     document.getElementById(id).classList.remove('show');

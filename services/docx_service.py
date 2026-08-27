@@ -19,11 +19,29 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from config import Config
 
-# Tamaño estándar para las imágenes referenciales: se fija la ALTURA en
-# ALTO_IMAGEN_ESTANDAR y el ANCHO se calcula según la proporción de cada
-# imagen, para que ninguna quede distorsionada. Ej.: 15x21 -> 5x7 (misma
-# proporción, altura estándar 7).
+# Tamaño estándar para las imágenes referenciales
 ALTO_IMAGEN_ESTANDAR = Cm(7)
+
+# Fuente institucional para las características técnicas
+# Según formato oficial: Century Gothic, 9pt
+FUENTE_CARACTERISTICAS = 'Century Gothic'
+TAMANO_CARACTERISTICAS = Pt(9)
+
+
+def _aplicar_fuente_institucional(run):
+    """Aplica Century Gothic 9pt a un run."""
+    run.font.name = FUENTE_CARACTERISTICAS
+    run.font.size = TAMANO_CARACTERISTICAS
+    # Forzar la fuente en el XML para que Word la respete
+    rPr = run._element.get_or_add_rPr()
+    rFonts = rPr.find(qn('w:rFonts'))
+    if rFonts is None:
+        from docx.oxml import OxmlElement
+        rFonts = OxmlElement('w:rFonts')
+        rPr.insert(0, rFonts)
+    rFonts.set(qn('w:ascii'), FUENTE_CARACTERISTICAS)
+    rFonts.set(qn('w:hAnsi'), FUENTE_CARACTERISTICAS)
+    rFonts.set(qn('w:cs'), FUENTE_CARACTERISTICAS)
 
 
 def _copiar_formato_celda(celda_origen, celda_destino):
@@ -174,6 +192,23 @@ def generar_especificacion_tecnica(datos):
     doc.save(buffer)
     buffer.seek(0)
     return buffer
+
+
+def _iterar_parrafos_doc(doc):
+    """
+    Itera sobre TODOS los párrafos del documento, incluyendo
+    los que están dentro de celdas de tablas. Esto es necesario
+    porque doc.paragraphs solo devuelve los del body principal.
+    """
+    # Párrafos del body principal
+    for p in doc.paragraphs:
+        yield p
+    # Párrafos dentro de tablas
+    for tabla in doc.tables:
+        for fila in tabla.rows:
+            for celda in fila.cells:
+                for p in celda.paragraphs:
+                    yield p
 
 
 def generar_ficha_tecnica(datos):
@@ -436,6 +471,7 @@ def _escribir_caracteristicas_tituladas(doc, titulo, chars, items=None):
 
         r_tit = actual.add_run(encabezado)
         r_tit.bold = True
+        _aplicar_fuente_institucional(r_tit)
 
         lineas = []
         for c in (lista or []):
@@ -447,6 +483,10 @@ def _escribir_caracteristicas_tituladas(doc, titulo, chars, items=None):
 
         r_cuer = actual.add_run('\n' + cuerpo)
         r_cuer.bold = False
+        _aplicar_fuente_institucional(r_cuer)
+
+        # Texto siempre a la izquierda
+        actual.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
         # Imagen referencial del ítem, justo después de sus características
         if items_list is not None:
@@ -466,7 +506,7 @@ def _escribir_caracteristicas_tituladas(doc, titulo, chars, items=None):
 def _escribir_bloque_caract(p, titulo, chars):
     """
     Escribe un bloque de características con encabezado en negrita
-    (Ficha Técnica, un único bien). Alineado a la izquierda.
+    (Ficha Técnica, un único bien). Century Gothic 9pt, alineado a la izquierda.
     """
     for r in list(p.runs):
         r._element.getparent().remove(r._element)
@@ -475,6 +515,7 @@ def _escribir_bloque_caract(p, titulo, chars):
 
     r_tit = p.add_run(titulo)
     r_tit.bold = True
+    _aplicar_fuente_institucional(r_tit)
 
     lineas = []
     for c in (chars or []):
@@ -486,6 +527,7 @@ def _escribir_bloque_caract(p, titulo, chars):
 
     r_cuer = p.add_run('\n' + cuerpo)
     r_cuer.bold = False
+    _aplicar_fuente_institucional(r_cuer)
 
 
 def _indice_parrafo(doc, p):

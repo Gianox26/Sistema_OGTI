@@ -490,7 +490,8 @@ def descargar_documento_et(id):
 
     try:
         buffer = generar_especificacion_tecnica(datos)
-        nombre_archivo = f"ET_{et['numero_pedido']}.docx"
+        denom_archivo = denom.upper().replace(' ', '_')[:50] if denom else 'ET'
+        nombre_archivo = f"ET_{et['numero_pedido']}_{denom_archivo}.docx"
         return send_file(
             buffer,
             as_attachment=True,
@@ -508,7 +509,7 @@ def listar_finalizadas():
     ets = query(
         """
         SELECT et.id, et.numero_pedido, et.fecha_pedido, et.anio_fiscal,
-               et.denominacion_adquisicion,
+               et.denominacion_adquisicion, et.proveedor_id,
                d.nombre AS centro_costo_nombre,
                p.razon_social AS proveedor_nombre, p.ruc AS proveedor_ruc,
                p.direccion AS proveedor_direccion, p.telefono AS proveedor_telefono,
