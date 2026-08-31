@@ -538,6 +538,23 @@ function cerrarModal(id) {
 }
 
 // ============================================================
+// Preview de Carta de Almacén (formato institucional automático)
+// ============================================================
+
+function previsualizarCarta() {
+    const num = (document.getElementById('ft-carta').value || '').trim();
+    const preview = document.getElementById('carta-preview');
+    if (!preview) return;
+    
+    if (num) {
+        const anio = new Date().getFullYear();
+        preview.textContent = `→ CARTA N°${num} -${anio}-MPSR-J/OGA/OL/AC/WDB`;
+    } else {
+        preview.textContent = '';
+    }
+}
+
+// ============================================================
 // Búsqueda de Especificaciones (Cache-Aside + Firecrawl Web)
 // ============================================================
 

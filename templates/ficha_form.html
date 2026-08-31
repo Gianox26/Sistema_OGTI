@@ -108,9 +108,10 @@
                     <span id="serie-feedback" class="form-help"></span>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Nombre de Carta de Almacén</label>
+                    <label class="form-label">N° de Carta de Almacén</label>
                     <input type="text" id="ft-carta" class="form-control"
-                           placeholder="Ej: CARTA-ALM-2026-0045">
+                           placeholder="Ej: 045" oninput="previsualizarCarta()">
+                    <span id="carta-preview" class="form-help" style="color:var(--primary);"></span>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Guía de Remisión del Proveedor</label>

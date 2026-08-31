@@ -60,23 +60,78 @@ def _actualizar_catalogo_modelo(marca, modelo, caracteristicas):
 @fichas_bp.route('/fichas')
 @login_required
 def pagina_lista():
-    """Lista de todas las Fichas Técnicas."""
-    fichas = query(
-        """
+    """Lista de Fichas Técnicas con filtros de búsqueda."""
+    # Recoger filtros GET
+    filtros = {
+        'q': request.args.get('q', '').strip(),
+        'numero_pedido': request.args.get('numero_pedido', '').strip(),
+        'anio': request.args.get('anio', '').strip(),
+        'estado': request.args.get('estado', '').strip(),
+        'responsable': request.args.get('responsable', '').strip(),
+        'dependencia': request.args.get('dependencia', '').strip(),
+    }
+
+    base_query = """
         SELECT ft.id, ft.numero_correlativo, ft.anio, ft.marca, ft.modelo,
                ft.numero_serie, ft.estado, ft.estado_fisico,
                ft.fecha_creacion, ft.fecha_finalizacion,
                ie.descripcion AS bien_descripcion,
                et.numero_pedido,
+               ft.proveedor_razon,
+               r.nombre AS responsable_nombre,
+               d.nombre AS dependencia_nombre,
                u.nombre_completo AS creado_por_nombre
         FROM fichas_tecnicas ft
         JOIN items_especificacion ie ON ft.item_id = ie.id
         JOIN especificaciones_tecnicas et ON ft.especificacion_id = et.id
+        LEFT JOIN responsables r ON ft.responsable_id = r.id
+        LEFT JOIN dependencias d ON r.dependencia_id = d.id
         LEFT JOIN usuarios u ON ft.creado_por = u.id
-        ORDER BY ft.fecha_creacion DESC
-        """
-    )
-    return render_template('ficha_lista.html', fichas=fichas)
+    """
+
+    conditions = []
+    params = []
+
+    # Búsqueda general: ficha, marca, modelo, serie, proveedor
+    if filtros['q']:
+        conditions.append("""(
+            CAST(ft.numero_correlativo AS TEXT) ILIKE %s
+            OR ft.marca ILIKE %s
+            OR ft.modelo ILIKE %s
+            OR ft.numero_serie ILIKE %s
+            OR ft.proveedor_razon ILIKE %s
+            OR ie.descripcion ILIKE %s
+        )""")
+        like = f"%{filtros['q']}%"
+        params.extend([like] * 6)
+
+    if filtros['numero_pedido']:
+        conditions.append("et.numero_pedido ILIKE %s")
+        params.append(f"%{filtros['numero_pedido']}%")
+
+    if filtros['anio']:
+        conditions.append("ft.anio = %s")
+        params.append(int(filtros['anio']))
+
+    if filtros['estado']:
+        conditions.append("ft.estado = %s")
+        params.append(filtros['estado'])
+
+    if filtros['responsable']:
+        conditions.append("r.nombre ILIKE %s")
+        params.append(f"%{filtros['responsable']}%")
+
+    if filtros['dependencia']:
+        conditions.append("d.nombre ILIKE %s")
+        params.append(f"%{filtros['dependencia']}%")
+
+    if conditions:
+        base_query += " WHERE " + " AND ".join(conditions)
+
+    base_query += " ORDER BY ft.fecha_creacion DESC LIMIT 200"
+
+    fichas = query(base_query, tuple(params) if params else None)
+    return render_template('ficha_lista.html', fichas=fichas, filtros=filtros)
 
 
 @fichas_bp.route('/fichas/nueva')
@@ -126,6 +181,115 @@ def pagina_ver(id):
 # ============================================================
 # API REST
 # ============================================================
+
+@fichas_bp.route('/api/fichas/buscar-pedido', methods=['GET'])
+@login_required
+def buscar_pedido():
+    """
+    Busca un número de pedido en ETs existentes o en pedidos de referencia.
+    Si existe, devuelve datos para autocompletar.
+    Si no, indica que no se encontró para habilitar ingreso manual.
+    """
+    numero = (request.args.get('numero', '') or '').strip()
+    if not numero:
+        return jsonify({'error': 'Número de pedido requerido'}), 400
+
+    # 1. Buscar en especificaciones_tecnicas
+    et = query(
+        """
+        SELECT et.id, et.numero_pedido, et.fecha_pedido,
+               et.denominacion_adquisicion,
+               p.ruc AS proveedor_ruc, p.razon_social AS proveedor_razon,
+               p.direccion AS proveedor_direccion, p.telefono AS proveedor_telefono,
+               p.correo AS proveedor_correo,
+               d.nombre AS centro_costo_nombre
+        FROM especificaciones_tecnicas et
+        LEFT JOIN proveedores p ON et.proveedor_id = p.id
+        LEFT JOIN dependencias d ON et.centro_costo_id = d.id
+        WHERE et.numero_pedido = %s
+        LIMIT 1
+        """,
+        (numero,),
+        fetchone=True
+    )
+    if et:
+        return jsonify({
+            'encontrado': True,
+            'origen': 'ET_INTERNA',
+            'datos': dict(et)
+        })
+
+    # 2. Buscar en pedidos de referencia (ETs externas)
+    ref = query(
+        """
+        SELECT pr.*, p.ruc AS proveedor_ruc, p.razon_social AS proveedor_razon,
+               p.direccion AS proveedor_direccion, p.telefono AS proveedor_telefono,
+               d.nombre AS centro_costo_nombre
+        FROM pedidos_referencia pr
+        LEFT JOIN proveedores p ON pr.proveedor_id = p.id
+        LEFT JOIN dependencias d ON pr.centro_costo_id = d.id
+        WHERE pr.numero_pedido = %s
+        LIMIT 1
+        """,
+        (numero,),
+        fetchone=True
+    )
+    if ref:
+        return jsonify({
+            'encontrado': True,
+            'origen': 'REFERENCIA',
+            'datos': {
+                'numero_pedido': ref['numero_pedido'],
+                'fecha_pedido': ref['fecha_pedido'].strftime('%Y-%m-%d') if ref.get('fecha_pedido') else None,
+                'denominacion_adquisicion': ref.get('denominacion_adquisicion'),
+                'proveedor_ruc': ref.get('proveedor_ruc'),
+                'proveedor_razon': ref.get('proveedor_razon'),
+                'proveedor_direccion': ref.get('proveedor_direccion'),
+                'proveedor_telefono': ref.get('proveedor_telefono'),
+                'centro_costo_nombre': ref.get('centro_costo_nombre'),
+            }
+        })
+
+    return jsonify({'encontrado': False})
+
+
+@fichas_bp.route('/api/fichas/registro-pedido-manual', methods=['POST'])
+@login_required
+def registro_pedido_manual():
+    """
+    Registra un pedido de referencia (ET externa) con datos mínimos.
+    Se usa cuando la ET no fue redactada en el sistema.
+    """
+    data = request.get_json()
+    numero = (data.get('numero_pedido', '') or '').strip()
+
+    if not numero:
+        return jsonify({'error': 'Número de pedido es obligatorio'}), 400
+
+    resultado = execute(
+        """
+        INSERT INTO pedidos_referencia (numero_pedido, fecha_pedido, denominacion_adquisicion,
+                                        proveedor_id, centro_costo_id, notas, creado_por)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (numero_pedido) DO UPDATE SET
+            fecha_pedido = COALESCE(EXCLUDED.fecha_pedido, pedidos_referencia.fecha_pedido),
+            denominacion_adquisicion = COALESCE(EXCLUDED.denominacion_adquisicion, pedidos_referencia.denominacion_adquisicion),
+            proveedor_id = COALESCE(EXCLUDED.proveedor_id, pedidos_referencia.proveedor_id)
+        RETURNING id, numero_pedido
+        """,
+        (
+            numero,
+            data.get('fecha_pedido') or None,
+            data.get('denominacion_adquisicion', '').strip() or None,
+            data.get('proveedor_id') or None,
+            data.get('centro_costo_id') or None,
+            data.get('notas', '').strip() or None,
+            session['usuario_id'],
+        ),
+        returning=True
+    )
+    return jsonify(resultado), 201
+
 
 @fichas_bp.route('/api/fichas/validar-serie', methods=['GET'])
 @login_required
@@ -651,13 +815,18 @@ def descargar_documento_ft(id):
             return default
         return val
 
-    # Auto-formatear carta de almacén
-    carta_raw = ft.get('carta_levantamiento', '') or ''
+    # Auto-formatear carta de almacén: usuario ingresa solo el número
+    carta_raw = (ft.get('carta_levantamiento', '') or '').strip()
     anio_actual = ft.get('anio', datetime.now().year)
-    if carta_raw and not carta_raw.upper().startswith('N°'):
-        carta_formateada = f"N° Carta {carta_raw}-{anio_actual}"
+    if carta_raw:
+        # Si ya tiene formato completo, dejarlo; si es solo número, armar el formato
+        if carta_raw.upper().startswith('CARTA'):
+            carta_formateada = carta_raw
+        else:
+            sufijo = Config.SUFIJO_CARTA
+            carta_formateada = f"CARTA N\u00b0{carta_raw} -{anio_actual}-{sufijo}"
     else:
-        carta_formateada = carta_raw
+        carta_formateada = ''
 
     # --- Mapeo EXACTO de variables de la plantilla ficha_tecnica_tpl.docx ---
     datos = {

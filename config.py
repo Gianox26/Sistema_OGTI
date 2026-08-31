@@ -22,3 +22,7 @@ class Config:
     # Plantillas específicas
     PLANTILLA_FICHA = os.path.join(PLANTILLAS_DIR, 'ficha_tecnica_tpl.docx')
     PLANTILLA_ET = os.path.join(PLANTILLAS_DIR, 'especificacion_tecnica_tpl.docx')
+
+    # Formato institucional de la carta de almacén
+    # Solo el número se ingresa; el año se toma del año fiscal de la ficha
+    SUFIJO_CARTA = 'MPSR-J/OGA/OL/AC/WDB'

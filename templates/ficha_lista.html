@@ -6,11 +6,58 @@
     <div class="page-header">
         <div>
             <h2>📄 Fichas Técnicas</h2>
-            <p>Listado de todas las fichas técnicas registradas</p>
+            <p>Listado y buscador de fichas técnicas registradas</p>
         </div>
         <a href="{{ url_for('fichas.pagina_nueva') }}" class="btn btn-success">
             ➕ Nueva Ficha Técnica
         </a>
+    </div>
+
+    <!-- Buscador -->
+    <div class="card" style="margin-bottom:1rem;">
+        <div class="card-body" style="padding:0.75rem 1rem;">
+            <form method="GET" action="{{ url_for('fichas.pagina_lista') }}" id="form-buscar-ft">
+                <div class="form-grid" style="gap:0.5rem;">
+                    <div class="form-group" style="grid-column: span 2;">
+                        <input type="text" name="q" class="form-control"
+                               placeholder="🔍 Buscar por N° ficha, marca, modelo, serie, proveedor, descripción..."
+                               value="{{ filtros.q or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="numero_pedido" class="form-control"
+                               placeholder="N° Pedido"
+                               value="{{ filtros.numero_pedido or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <select name="estado" class="form-control">
+                            <option value="">— Estado —</option>
+                            <option value="BORRADOR" {{ 'selected' if filtros.estado == 'BORRADOR' }}>Borrador</option>
+                            <option value="FINALIZADA" {{ 'selected' if filtros.estado == 'FINALIZADA' }}>Finalizada</option>
+                            <option value="ANULADA" {{ 'selected' if filtros.estado == 'ANULADA' }}>Anulada</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <input type="number" name="anio" class="form-control"
+                               placeholder="Año" min="2020" max="2100"
+                               value="{{ filtros.anio or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="responsable" class="form-control"
+                               placeholder="Responsable"
+                               value="{{ filtros.responsable or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="dependencia" class="form-control"
+                               placeholder="Dependencia"
+                               value="{{ filtros.dependencia or '' }}">
+                    </div>
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.5rem; justify-content:flex-end;">
+                    <button type="submit" class="btn btn-primary btn-sm">🔍 Buscar</button>
+                    <a href="{{ url_for('fichas.pagina_lista') }}" class="btn btn-secondary btn-sm">✕ Limpiar</a>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="card">
@@ -25,8 +72,8 @@
                             <th>Marca / Modelo</th>
                             <th>N° Serie</th>
                             <th>N° Pedido</th>
-                            <th>Estado Físico</th>
-                            <th>Creado por</th>
+                            <th>Proveedor</th>
+                            <th>Responsable</th>
                             <th>Estado</th>
                             <th></th>
                         </tr>
@@ -41,12 +88,12 @@
                                 <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
-                            <td>{{ ft.bien_descripcion|truncate(40) }}</td>
-                            <td>{{ ft.marca }} {{ ft.modelo }}</td>
-                            <td><code>{{ ft.numero_serie }}</code></td>
+                            <td>{{ ft.bien_descripcion|truncate(35) }}</td>
+                            <td>{{ ft.marca or '' }} {{ ft.modelo or '' }}</td>
+                            <td><code>{{ ft.numero_serie or 'SIN SERIE' }}</code></td>
                             <td class="text-sm">{{ ft.numero_pedido }}</td>
-                            <td>{{ ft.estado_fisico or '-' }}</td>
-                            <td class="text-sm text-muted">{{ ft.creado_por_nombre }}</td>
+                            <td class="text-sm text-muted">{{ ft.proveedor_razon or '-' }}</td>
+                            <td class="text-sm text-muted">{{ ft.responsable_nombre or '-' }}</td>
                             <td>
                                 {% if ft.estado == 'FINALIZADA' %}
                                 <span class="badge badge-success">Finalizada</span>
@@ -65,13 +112,25 @@
                     </tbody>
                 </table>
             </div>
+            {% if fichas|length >= 200 %}
+            <div class="alert alert-info" style="margin:0.75rem;">
+                ℹ️ Se muestran los primeros 200 resultados. Use los filtros para refinar la búsqueda.
+            </div>
+            {% endif %}
             {% else %}
             <div class="empty-state">
                 <div class="icon">📄</div>
+                {% if filtros.q or filtros.numero_pedido or filtros.anio or filtros.estado %}
+                <p>No se encontraron fichas con los filtros aplicados</p>
+                <a href="{{ url_for('fichas.pagina_lista') }}" class="btn btn-secondary mt-2">
+                    Limpiar filtros
+                </a>
+                {% else %}
                 <p>No hay fichas técnicas registradas</p>
                 <a href="{{ url_for('fichas.pagina_nueva') }}" class="btn btn-success mt-2">
                     Crear la primera
                 </a>
+                {% endif %}
             </div>
             {% endif %}
         </div>

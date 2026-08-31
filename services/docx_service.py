@@ -228,6 +228,13 @@ def generar_ficha_tecnica(datos):
     chars = datos.get('caracteristicas', [])
     if not isinstance(chars, list):
         chars = []
+
+    # Filtrar: solo características principales para el documento (1 página)
+    # Si el campo 'principal' no existe, se asume True (retrocompatibilidad)
+    chars_principales = [c for c in chars if c.get('principal', True)]
+    # Ordenar por el campo 'orden' si existe
+    chars_principales.sort(key=lambda c: c.get('orden', 999))
+
     titulo = f"CARACTERÍSTICAS DE {datos.get('bien_descripcion') or 'BIEN'}"
 
     # Renderizar con un marcador centinela; luego lo reemplazamos con
@@ -248,7 +255,7 @@ def generar_ficha_tecnica(datos):
     ocurrencias = [p for p in _iterar_parrafos_doc(doc) if SENTINEL in p.text]
     for n, p in enumerate(ocurrencias):
         if n == 0:
-            _escribir_bloque_caract(p, titulo, chars)
+            _escribir_bloque_caract(p, titulo, chars_principales)
         else:
             for r in list(p.runs):
                 r._element.getparent().remove(r._element)
@@ -269,9 +276,12 @@ def generar_ficha_tecnica(datos):
 # ============================================================
 
 def _format_cantidad(cant):
-    """Formatea cantidad como string decimal."""
+    """Formatea cantidad: entero si es exacto (1, 2, 3), decimal solo si tiene fracción."""
     try:
-        return f"{float(cant):.2f}"
+        val = float(cant)
+        if val == int(val):
+            return str(int(val))
+        return f"{val:.2f}"
     except (ValueError, TypeError):
         return str(cant)
 
