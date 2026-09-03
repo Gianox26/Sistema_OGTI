@@ -74,7 +74,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Número de Serie</label>
-                    <input type="text" class="form-control" value="{{ ft.numero_serie }}" readonly
+                    <input type="text" class="form-control" value="{{ ft.numero_serie or 'S/N (Sin Serie)' }}" readonly
                            style="font-weight:700; font-family:monospace;">
                 </div>
                 <div class="form-group">

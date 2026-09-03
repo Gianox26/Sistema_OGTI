@@ -38,6 +38,19 @@ def create_app():
     app.register_blueprint(fichas_bp)
     app.register_blueprint(historial_bp)
 
+    # Filtro Jinja2 para formateo de correlativos (mínimo 3 dígitos)
+    from services.numeracion import formatear_correlativo
+    @app.template_filter('correlativo')
+    def filter_correlativo(numero, anio=None):
+        if not numero:
+            return '—'
+        if anio:
+            return formatear_correlativo(numero, anio)
+        num_str = str(numero).strip()
+        if num_str.isdigit():
+            return num_str.zfill(3)
+        return num_str
+
     return app
 
 

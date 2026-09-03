@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS especificaciones_tecnicas (
     fecha_finalizacion       TIMESTAMP,
     motivo_anulacion         TEXT,
 
-    CONSTRAINT uq_et_numero_pedido UNIQUE (numero_pedido)
+    CONSTRAINT uq_et_numero_pedido_anio UNIQUE (numero_pedido, anio_fiscal)
 );
 
 CREATE INDEX IF NOT EXISTS idx_et_numero_pedido

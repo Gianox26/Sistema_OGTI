@@ -73,13 +73,18 @@ def obtener_siguiente_correlativo(anio):
 
 def formatear_correlativo(numero, anio):
     """
-    Formatea el correlativo en el formato oficial: 181-2026
+    Formatea el correlativo en el formato oficial con mínimo 3 dígitos: 004-2026
 
     Args:
-        numero: Número correlativo (int)
-        anio: Año fiscal (int)
+        numero: Número correlativo (int o str)
+        anio: Año fiscal (int o str)
 
     Returns:
-        str: Formato oficial (ej: "181-2026")
+        str: Formato oficial (ej: "004-2026", "042-2026", "123-2026", "1234-2026")
     """
-    return f"{numero}-{anio}"
+    if numero is None:
+        return f"000-{anio}"
+    num_str = str(numero).strip()
+    if num_str.isdigit():
+        num_str = num_str.zfill(3)
+    return f"{num_str}-{anio}"

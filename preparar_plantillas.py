@@ -140,15 +140,29 @@ def preparar_plantilla_ft():
 
     # ── TABLA 2: Bien/Estado/Marca/Modelo/Color/Serie/Características/Carta ──
     t2 = doc.tables[1]
-    set_cell_text(t2.rows[1].cells[0], '{{ bien_equipo }}')
-    set_cell_text(t2.rows[1].cells[4], '{{ estado_fisico }}')
+    # Preservar la etiqueta "DESCRIPCIÓN DEL EQUIPO:" en la celda 0
+    # Asignar la descripción del bien a la celda 1 (que abarca las columnas 1 a 4)
+    set_cell_text(t2.rows[1].cells[1], '{{ descripcion_bien }}')
     set_cell_text(t2.rows[3].cells[0], '{{ marca }}')
     set_cell_text(t2.rows[3].cells[1], '{{ marca }}')
     set_cell_text(t2.rows[3].cells[2], '{{ modelo }}')
     set_cell_text(t2.rows[3].cells[3], '{{ color }}')
     set_cell_text(t2.rows[3].cells[4], '{{ numero_serie }}')
-    set_cell_text(t2.rows[5].cells[0], '{{ caracteristicas_texto }}')
+    # Celda de características: reemplazar todo su contenido por un único tag
+    c_caract = t2.rows[5].cells[0]
+    c_caract.paragraphs[0].text = '{{ caracteristicas_texto }}'
+    for p_extra in c_caract.paragraphs[1:]:
+        p_extra._element.getparent().remove(p_extra._element)
+
     set_cell_text(t2.rows[5].cells[4], '{{ carta_levantamiento }}')
+
+    # Cambiar estilo de la celda de características a 'Normal' (remover viñeta de lista)
+    try:
+        p_caract = t2.rows[5].cells[0].paragraphs[0]
+        p_caract.style = doc.styles['Normal']
+    except Exception:
+        pass
+
     print("  ✅ Tabla 2 (Bien/Marca/Serie/Características)")
 
     # ── TABLA 3: Datos Requerimiento ──
@@ -178,6 +192,16 @@ def preparar_plantilla_ft():
     set_cell_text(t4.rows[6].cells[7], '{{ garantia }}')
     set_cell_text(t4.rows[8].cells[0], '{{ observaciones }}')
     print("  ✅ Tabla 4 (Responsable/Proveedor)")
+
+    # Ajustar tamaño de fuente y posición en el cuadro del escudo del encabezado
+    try:
+        from docx.oxml import parse_xml
+        c0 = doc.tables[0].rows[0].cells[0]
+        xml_fixed = c0._tc.xml.replace('w:val="16"', 'w:val="13"').replace('margin-top:46.75pt', 'margin-top:34.00pt')
+        new_tc = parse_xml(xml_fixed)
+        c0._tc.getparent().replace(c0._tc, new_tc)
+    except Exception as e:
+        print("  ⚠️ No se pudo ajustar la celda del escudo:", e)
 
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     doc.save(dst)

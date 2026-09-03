@@ -4,6 +4,8 @@ Creación, validación de serie, checklist, finalización con
 numeración atómica, carga masiva y descarga de documento oficial.
 """
 import json
+import io
+import zipfile
 from datetime import datetime
 from flask import Blueprint, request, jsonify, render_template, session, send_file
 from psycopg2 import IntegrityError
@@ -11,6 +13,7 @@ from services.db import query, execute, get_connection
 from services.numeracion import obtener_siguiente_correlativo, formatear_correlativo
 from services.docx_service import generar_ficha_tecnica
 from routes.auth import login_required, rol_required
+from config import Config
 import psycopg2.extras
 
 fichas_bp = Blueprint('fichas', __name__)
@@ -51,6 +54,50 @@ def _actualizar_catalogo_modelo(marca, modelo, caracteristicas):
     except Exception as e:
         print(f"Error actualizando catalogo_modelos: {e}")
 
+
+
+@fichas_bp.route('/api/fichas/contador', methods=['GET', 'POST'])
+@login_required
+def gestionar_contador():
+    """
+    GET: Devuelve el valor actual del contador de fichas del año actual.
+    POST: Modifica el último número asignado (para inicialización a mitad de año).
+    """
+    anio_actual = datetime.now().year
+    if request.method == 'GET':
+        row = query(
+            "SELECT anio, ultimo_numero FROM contador_fichas WHERE anio = %s",
+            (anio_actual,), fetchone=True
+        )
+        ultimo = row['ultimo_numero'] if row else 0
+        siguiente = formatear_correlativo(ultimo + 1, anio_actual)
+        return jsonify({
+            'anio': anio_actual,
+            'ultimo_numero': ultimo,
+            'siguiente_correlativo': siguiente
+        })
+    else:
+        data = request.get_json() or {}
+        nuevo_ultimo = data.get('ultimo_numero')
+        anio = data.get('anio', anio_actual)
+
+        if nuevo_ultimo is None or not isinstance(nuevo_ultimo, int) or nuevo_ultimo < 0:
+            return jsonify({'error': 'El último número debe ser un entero no negativo'}), 400
+
+        execute(
+            """
+            INSERT INTO contador_fichas (anio, ultimo_numero)
+            VALUES (%s, %s)
+            ON CONFLICT (anio) DO UPDATE SET ultimo_numero = EXCLUDED.ultimo_numero
+            """,
+            (anio, nuevo_ultimo)
+        )
+        siguiente = formatear_correlativo(nuevo_ultimo + 1, anio)
+        return jsonify({
+            'message': f'Contador del año {anio} actualizado exitosamente.',
+            'ultimo_numero': nuevo_ultimo,
+            'siguiente_correlativo': siguiente
+        })
 
 
 # ============================================================
@@ -495,6 +542,42 @@ def actualizar_ficha(id):
         raise
 
 
+def _verificar_y_actualizar_estado_et(cur, especificacion_id):
+    """
+    Verifica si todos los ítems de la ET tienen cubiertas sus cantidades con Fichas Técnicas FINALIZADAS.
+    De ser así, cambia el estado de la ET a 'FINALIZADA'.
+    """
+    if not especificacion_id:
+        return False
+
+    cur.execute(
+        "SELECT COALESCE(SUM(cantidad), 0) as total_requerido, COUNT(id) as cant_items "
+        "FROM items_especificacion WHERE especificacion_id = %s",
+        (especificacion_id,)
+    )
+    res_items = cur.fetchone()
+    if not res_items or res_items['cant_items'] == 0:
+        return False
+
+    total_requerido = float(res_items['total_requerido'])
+
+    cur.execute(
+        "SELECT COUNT(id) as total_finalizadas "
+        "FROM fichas_tecnicas WHERE especificacion_id = %s AND estado = 'FINALIZADA'",
+        (especificacion_id,)
+    )
+    res_fichas = cur.fetchone()
+    total_finalizadas = res_fichas['total_finalizadas'] if res_fichas else 0
+
+    if total_finalizadas >= total_requerido:
+        cur.execute(
+            "UPDATE especificaciones_tecnicas SET estado = 'FINALIZADA' WHERE id = %s AND estado != 'FINALIZADA'",
+            (especificacion_id,)
+        )
+        return True
+    return False
+
+
 @fichas_bp.route('/api/fichas/<int:id>/finalizar', methods=['POST'])
 @rol_required('JEFE_OGTI')
 def finalizar_ficha(id):
@@ -504,6 +587,7 @@ def finalizar_ficha(id):
     2. Valida que el checklist esté completo (6 casillas).
     3. Asigna el correlativo atómico anual.
     4. Cambia estado a FINALIZADA (inmutable).
+    5. Actualiza automáticamente el estado de la ET a FINALIZADA si todos sus ítems están cubiertos.
     """
     ft = query(
         "SELECT * FROM fichas_tecnicas WHERE id = %s",
@@ -515,9 +599,22 @@ def finalizar_ficha(id):
     if ft['estado'] != 'BORRADOR':
         return jsonify({'error': 'Solo se puede finalizar una Ficha en estado BORRADOR'}), 400
 
+    # Verificar si el tipo de bien exige número de serie
+    tb_info = query(
+        """
+        SELECT tb.requiere_serie
+        FROM items_especificacion ie
+        JOIN tipos_bien tb ON ie.tipo_bien_id = tb.id
+        WHERE ie.id = %s
+        """,
+        (ft.get('item_id'),),
+        fetchone=True
+    )
+    requiere_serie = tb_info['requiere_serie'] if (tb_info and 'requiere_serie' in tb_info) else True
+
     # Validar campos obligatorios
-    if not ft.get('numero_serie'):
-        return jsonify({'error': 'El número de serie es obligatorio'}), 400
+    if requiere_serie and not ft.get('numero_serie'):
+        return jsonify({'error': 'El número de serie es obligatorio para este tipo de bien'}), 400
     if not ft.get('marca'):
         return jsonify({'error': 'La marca es obligatoria'}), 400
     if not ft.get('modelo'):
@@ -543,17 +640,25 @@ def finalizar_ficha(id):
     numero = obtener_siguiente_correlativo(anio)
     correlativo_formateado = formatear_correlativo(numero, anio)
 
-    execute(
-        """
-        UPDATE fichas_tecnicas
-        SET numero_correlativo = %s,
-            estado = 'FINALIZADA',
-            finalizado_por = %s,
-            fecha_finalizacion = NOW()
-        WHERE id = %s
-        """,
-        (numero, session['usuario_id'], id)
-    )
+    et_finalizada = False
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE fichas_tecnicas
+                SET numero_correlativo = %s,
+                    estado = 'FINALIZADA',
+                    finalizado_por = %s,
+                    fecha_finalizacion = NOW()
+                WHERE id = %s
+                """,
+                (numero, session['usuario_id'], id)
+            )
+            et_finalizada = _verificar_y_actualizar_estado_et(cur, ft.get('especificacion_id'))
+            conn.commit()
+    finally:
+        conn.close()
 
     # Marcar modelo como verificado en catalogo_modelos
     if ft.get('marca') and ft.get('modelo'):
@@ -565,7 +670,9 @@ def finalizar_ficha(id):
     return jsonify({
         'message': 'Ficha Técnica finalizada correctamente',
         'numero_correlativo': correlativo_formateado,
-        'id': id
+        'id': id,
+        'especificacion_id': ft.get('especificacion_id'),
+        'et_finalizada': et_finalizada
     })
 
 
@@ -679,22 +786,39 @@ def carga_masiva():
 
     anio_actual = datetime.now().year
 
-    # Normalizar y validar todas las series antes de la transacción
+    # Obtener si el tipo de bien exige número de serie
+    tb = query(
+        """
+        SELECT tb.requiere_serie
+        FROM items_especificacion ie
+        JOIN tipos_bien tb ON ie.tipo_bien_id = tb.id
+        WHERE ie.id = %s
+        """,
+        (item_id,),
+        fetchone=True
+    )
+    requiere_serie = tb['requiere_serie'] if (tb and 'requiere_serie' in tb) else True
+
+    # Normalizar y validar series antes de la transacción
     series_normalizadas = []
     for i, s in enumerate(series):
-        serie_norm = normalizar_serie(s.get('numero_serie', ''))
-        if not serie_norm:
+        raw_serie = s.get('numero_serie', '')
+        serie_norm = normalizar_serie(raw_serie) if raw_serie else None
+        if requiere_serie and not serie_norm:
             return jsonify({
-                'error': f'Fila {i + 1}: El número de serie está vacío'
+                'error': f'Fila {i + 1}: El número de serie es obligatorio para este tipo de bien'
             }), 400
         series_normalizadas.append(serie_norm)
 
-    # Verificar duplicados dentro del mismo lote
-    if len(set(series_normalizadas)) != len(series_normalizadas):
-        duplicados = [s for s in series_normalizadas if series_normalizadas.count(s) > 1]
+    # Verificar duplicados entre series con valor dentro del lote
+    series_con_valor = [s for s in series_normalizadas if s]
+    if len(set(series_con_valor)) != len(series_con_valor):
+        duplicados = [s for s in series_con_valor if series_con_valor.count(s) > 1]
         return jsonify({
             'error': f'El lote contiene números de serie duplicados: {list(set(duplicados))}'
         }), 400
+
+    finalizar_lote = data.get('finalizar', False)
 
     # Transacción atómica: todo-o-nada
     conn = get_connection()
@@ -703,49 +827,85 @@ def carga_masiva():
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             for i, s in enumerate(series):
                 serie_norm = series_normalizadas[i]
+                estado_inicial = 'FINALIZADA' if finalizar_lote else 'BORRADOR'
+                correlativo_num = None
+
+                if finalizar_lote:
+                    cur.execute(
+                        "SELECT ultimo_numero FROM contador_fichas WHERE anio = %s FOR UPDATE",
+                        (anio_actual,)
+                    )
+                    row_c = cur.fetchone()
+                    if row_c is None:
+                        cur.execute(
+                            "INSERT INTO contador_fichas (anio, ultimo_numero) VALUES (%s, 1) RETURNING ultimo_numero",
+                            (anio_actual,)
+                        )
+                        correlativo_num = 1
+                    else:
+                        correlativo_num = row_c['ultimo_numero'] + 1
+                        cur.execute(
+                            "UPDATE contador_fichas SET ultimo_numero = %s WHERE anio = %s",
+                            (correlativo_num, anio_actual)
+                        )
+
                 try:
                     cur.execute(
                         """
                         INSERT INTO fichas_tecnicas
                             (anio, especificacion_id, item_id,
                              marca, modelo, color, numero_serie, estado_fisico,
-                             observaciones, carta_levantamiento,
+                             observaciones, carta_levantamiento, guia_remision,
                              proveedor_ruc, proveedor_razon, proveedor_direccion,
                              proveedor_telefono, proveedor_correo,
                              responsable_id,
                              orden_compra, costo, fecha_adquisicion, garantia,
                              caracteristicas_verificadas, checklist,
-                             creado_por)
+                             creado_por, estado, numero_correlativo, finalizado_por, fecha_finalizacion)
                         VALUES (%s, %s, %s,
                                 %s, %s, %s, %s, %s,
-                                %s, %s,
+                                %s, %s, %s,
                                 %s, %s, %s, %s, %s,
                                 %s,
                                 %s, %s, %s, %s,
-                                %s::jsonb, '{}'::jsonb,
-                                %s)
-                        RETURNING id, numero_serie
+                                %s::jsonb, %s::jsonb,
+                                %s, %s, %s, %s, %s)
+                        RETURNING id, numero_serie, numero_correlativo
                         """,
                         (
                             anio_actual, especificacion_id, item_id,
-                            s.get('marca', '').strip(),
-                            s.get('modelo', '').strip(),
-                            s.get('color', '').strip(),
+                            (s.get('marca') or data.get('marca') or '').strip(),
+                            (s.get('modelo') or data.get('modelo') or '').strip(),
+                            (s.get('color') or data.get('color') or '').strip(),
                             serie_norm,
-                            s.get('estado_fisico', ''),
-                            s.get('observaciones', '').strip(),
-                            s.get('carta_levantamiento', '').strip(),
-                             et.get('ruc') or '', et.get('razon_social') or '',
-                             et.get('prov_dir') or '', et.get('prov_tel') or '',
-                             et.get('prov_correo') or '',
-                            s.get('responsable_id'),
-                             None, None, None, None,
-                            json.dumps(item.get('caracteristicas', [])),
+                            s.get('estado_fisico', '').strip() or 'NUEVO',
+                            (s.get('observaciones') or data.get('observaciones') or '').strip(),
+                            (s.get('carta_levantamiento') or data.get('carta_levantamiento') or '').strip(),
+                            (s.get('guia_remision') or data.get('guia_remision') or '').strip(),
+                            s.get('proveedor_ruc') or data.get('proveedor_ruc') or et.get('ruc') or '',
+                            s.get('proveedor_razon') or data.get('proveedor_razon') or et.get('razon_social') or '',
+                            s.get('proveedor_direccion') or data.get('proveedor_direccion') or et.get('prov_dir') or '',
+                            s.get('proveedor_telefono') or data.get('proveedor_telefono') or et.get('prov_tel') or '',
+                            s.get('proveedor_correo') or data.get('proveedor_correo') or et.get('prov_correo') or '',
+                            s.get('responsable_id') or data.get('responsable_id') or None,
+                            s.get('orden_compra') or data.get('orden_compra') or None,
+                            s.get('costo') or data.get('costo') or None,
+                            s.get('fecha_adquisicion') or data.get('fecha_adquisicion') or None,
+                            s.get('garantia') or data.get('garantia') or None,
+                            json.dumps(s.get('caracteristicas_verificadas') or data.get('caracteristicas_verificadas') or item.get('caracteristicas', [])),
+                            json.dumps(s.get('checklist') or data.get('checklist', {})),
                             session['usuario_id'],
+                            estado_inicial,
+                            correlativo_num,
+                            session['usuario_id'] if finalizar_lote else None,
+                            datetime.now() if finalizar_lote else None
                         )
                     )
                     row = cur.fetchone()
-                    fichas_creadas.append(dict(row))
+                    res_dict = dict(row)
+                    if correlativo_num:
+                        res_dict['correlativo_formateado'] = formatear_correlativo(correlativo_num, anio_actual)
+                    fichas_creadas.append(res_dict)
 
                 except IntegrityError as e:
                     conn.rollback()
@@ -757,10 +917,17 @@ def carga_masiva():
                         }), 409
                     raise
 
+            et_finalizada = False
+            if finalizar_lote:
+                et_finalizada = _verificar_y_actualizar_estado_et(cur, especificacion_id)
+
             conn.commit()
+            msg = f'{len(fichas_creadas)} Fichas Técnicas finalizadas con números correlativos asignados.' if finalizar_lote else f'{len(fichas_creadas)} fichas creadas como borradores'
             return jsonify({
-                'message': f'{len(fichas_creadas)} fichas creadas como borradores',
-                'fichas': fichas_creadas
+                'message': msg,
+                'fichas': fichas_creadas,
+                'especificacion_id': especificacion_id,
+                'et_finalizada': et_finalizada
             }), 201
 
     except Exception:
@@ -770,15 +937,18 @@ def carga_masiva():
         conn.close()
 
 
-@fichas_bp.route('/api/fichas/<int:id>/documento', methods=['GET'])
-@login_required
-def descargar_documento_ft(id):
-    """Genera y descarga el documento .docx de la Ficha Técnica."""
+def _generar_buffer_ft(id):
+    """
+    Genera en memoria el archivo docx de una Ficha Técnica.
+    Retorna (buffer, nombre_archivo) o (None, error_msg).
+    """
     ft = query(
         """
         SELECT ft.*,
                ie.descripcion AS bien_descripcion,
+               ie.caracteristicas AS item_caracteristicas,
                tb.nombre AS tipo_bien_nombre,
+               tb.requiere_serie,
                et.numero_pedido, et.fecha_pedido,
                et.denominacion_adquisicion AS denominacion_adquisicion,
                r.nombre AS responsable_nombre, r.cargo AS responsable_cargo,
@@ -796,30 +966,37 @@ def descargar_documento_ft(id):
         fetchone=True
     )
     if not ft:
-        return jsonify({'error': 'Ficha Técnica no encontrada'}), 404
+        return None, 'Ficha Técnica no encontrada'
 
     if ft['estado'] != 'FINALIZADA':
-        return jsonify({'error': 'Solo se pueden descargar documentos de fichas finalizadas'}), 400
+        return None, 'Solo se pueden descargar documentos de fichas finalizadas'
 
     correlativo = formatear_correlativo(ft['numero_correlativo'], ft['anio'])
 
-    # Preparar las características verificadas
-    caracteristicas = ft.get('caracteristicas_verificadas', [])
+    caracteristicas = ft.get('caracteristicas_verificadas')
     if isinstance(caracteristicas, str):
         caracteristicas = json.loads(caracteristicas)
 
-    # Construir función auxiliar: campo vacío => '...'
+    if not caracteristicas:
+        caracteristicas = ft.get('item_caracteristicas', [])
+        if isinstance(caracteristicas, str):
+            caracteristicas = json.loads(caracteristicas)
+
     def v(val, default='...'):
-        """Devuelve el valor o '...' si está vacío."""
         if val is None or (isinstance(val, str) and val.strip() == ''):
             return default
         return val
 
-    # Auto-formatear carta de almacén: usuario ingresa solo el número
+    raw_serie = (ft.get('numero_serie') or '').strip()
+    requiere_serie = ft.get('requiere_serie', True)
+    if not raw_serie:
+        serie_display = 'S/N' if requiere_serie else 'S/N (SIN SERIE)'
+    else:
+        serie_display = raw_serie
+
     carta_raw = (ft.get('carta_levantamiento', '') or '').strip()
     anio_actual = ft.get('anio', datetime.now().year)
     if carta_raw:
-        # Si ya tiene formato completo, dejarlo; si es solo número, armar el formato
         if carta_raw.upper().startswith('CARTA'):
             carta_formateada = carta_raw
         else:
@@ -828,31 +1005,21 @@ def descargar_documento_ft(id):
     else:
         carta_formateada = ''
 
-    # --- Mapeo EXACTO de variables de la plantilla ficha_tecnica_tpl.docx ---
     datos = {
-        # Datos generales
         'numero_correlativo': correlativo,
         'bien_equipo': v(ft.get('tipo_bien_nombre')),
         'descripcion_bien': v(ft.get('bien_descripcion')),
-
-        # Marca, modelo, color, serie
         'marca': v(ft.get('marca')),
         'modelo': v(ft.get('modelo')),
         'color': v(ft.get('color')),
-        'numero_serie': v(ft.get('numero_serie'), 'SIN SERIE'),
+        'numero_serie': serie_display,
         'estado_fisico': v(ft.get('estado_fisico'), 'NUEVO'),
-
-        # Carta y guía
         'carta_levantamiento': v(carta_formateada),
         'comprobante_guia': v(ft.get('guia_remision')),
-
-        # Proveedor
         'proveedor_razon_social': v(ft.get('proveedor_razon')),
         'proveedor_direccion': v(ft.get('proveedor_direccion')),
         'proveedor_telefono': v(ft.get('proveedor_telefono')),
         'proveedor_email': v(ft.get('proveedor_correo')),
-
-        # Adquisición
         'pedido_compra': v(ft.get('numero_pedido')),
         'fecha_pedido': ft['fecha_pedido'].strftime('%d/%m/%Y') if ft.get('fecha_pedido') else '...',
         'orden_compra': v(ft.get('orden_compra')),
@@ -860,31 +1027,73 @@ def descargar_documento_ft(id):
         'fecha_compra': ft['fecha_adquisicion'].strftime('%d/%m/%Y') if ft.get('fecha_adquisicion') else '...',
         'costo': v(str(ft['costo']) if ft.get('costo') else None),
         'garantia': v(ft.get('garantia')),
-
-        # Responsable
         'responsable_nombre': v(ft.get('responsable_nombre')),
         'responsable_cargo': v(ft.get('responsable_cargo')),
         'responsable_telefono': v(ft.get('responsable_telefono')),
         'responsable_email': v(ft.get('responsable_correo')),
         'dependencia': v(ft.get('dependencia_nombre')),
         'edificio': v(ft.get('edificio_nombre')),
-
-        # Observaciones
         'observaciones': v(ft.get('observaciones')),
-
-        # Características (para el bloque procesado con python-docx)
         'caracteristicas': caracteristicas,
     }
 
-    try:
-        buffer = generar_ficha_tecnica(datos)
-        nombre_archivo = f"FT_{correlativo}_{ft['marca']}_{ft['modelo']}.docx"
-        nombre_archivo = nombre_archivo.replace(' ', '_')
-        return send_file(
-            buffer,
-            as_attachment=True,
-            download_name=nombre_archivo,
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        )
-    except FileNotFoundError as e:
-        return jsonify({'error': str(e)}), 500
+    buffer = generar_ficha_tecnica(datos)
+    marca_str = (ft.get('marca') or 'BIEN').replace(' ', '_')
+    modelo_str = (ft.get('modelo') or '').replace(' ', '_')
+    nombre_archivo = f"FT_{correlativo}_{marca_str}_{modelo_str}.docx"
+    return buffer, nombre_archivo
+
+
+@fichas_bp.route('/api/fichas/<int:id>/documento', methods=['GET'])
+@login_required
+def descargar_documento_ft(id):
+    """Genera y descarga el documento .docx de la Ficha Técnica."""
+    buffer, nombre_archivo = _generar_buffer_ft(id)
+    if not buffer:
+        return jsonify({'error': nombre_archivo}), 400
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=nombre_archivo,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+
+
+@fichas_bp.route('/api/especificaciones/<int:et_id>/fichas/zip', methods=['GET'])
+@login_required
+def descargar_fichas_et_zip(et_id):
+    """
+    Genera y descarga un archivo ZIP con todos los documentos .docx
+    de las Fichas Técnicas finalizadas asociadas a una Especificación Técnica.
+    """
+    et = query("SELECT * FROM especificaciones_tecnicas WHERE id = %s", (et_id,), fetchone=True)
+    if not et:
+        return jsonify({'error': 'Especificación Técnica no encontrada'}), 404
+
+    fichas = query(
+        """
+        SELECT ft.id
+        FROM fichas_tecnicas ft
+        WHERE ft.especificacion_id = %s AND ft.estado = 'FINALIZADA'
+        ORDER BY ft.numero_correlativo ASC
+        """,
+        (et_id,)
+    )
+    if not fichas:
+        return jsonify({'error': 'No hay Fichas Técnicas finalizadas para esta Especificación Técnica'}), 404
+
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for f in fichas:
+            buf, fname = _generar_buffer_ft(f['id'])
+            if buf:
+                zf.writestr(fname, buf.getvalue())
+
+    memory_file.seek(0)
+    zip_name = f"Fichas_Tecnicas_ET_{et['numero_pedido']}_{et['anio_fiscal']}.zip"
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=zip_name
+    )

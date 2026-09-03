@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Registrar ET Recibida{% endblock %}
+
+{% block content %}
+<div class="main">
+    <div class="page-header" style="margin-bottom:1.5rem;">
+        <div>
+            <h2>📥 Registrar Especificación Técnica Recibida</h2>
+            <p>Captura rápida desde el documento físico recibido de otra oficina</p>
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+            <a href="{{ url_for('especificaciones.pagina_lista') }}" class="btn btn-secondary">
+                ← Volver al listado
+            </a>
+            <a href="{{ url_for('especificaciones.pagina_nueva_interna') }}" class="btn btn-secondary" title="Solo cuando la OGTI redacta la ET desde cero (caso poco frecuente)">
+                📝 Redactar ET Interna
+            </a>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         CARD 1: DATOS GENERALES DEL PEDIDO DE COMPRA
+         ══════════════════════════════════════════════════════════ -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">📌 Datos del Pedido de Compra</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+
+                <!-- Número de pedido -->
+                <div class="form-group">
+                    <label class="form-label">
+                        N° Pedido de Compra <span class="req">*</span>
+                    </label>
+                    <input type="text" id="numero_pedido" class="form-control"
+                           placeholder="Ej: 002425" required>
+                    <span class="form-help">Tal como figura en el documento</span>
+                </div>
+
+                <!-- Fecha del pedido -->
+                <div class="form-group">
+                    <label class="form-label">
+                        Fecha del Pedido <span class="req">*</span>
+                    </label>
+                    <input type="date" id="fecha_pedido" class="form-control" required>
+                </div>
+
+                <!-- Oficina / Dependencia Solicitante -->
+                <div class="form-group">
+                    <label class="form-label">Oficina / Dependencia Solicitante</label>
+                    <div style="display:flex; gap:0.5rem;">
+                        <select id="centro_costo_id" class="form-control" style="flex:1;">
+                            <option value="">-- Seleccionar --</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="abrirModal('modal-dependencia')" title="Agregar nueva oficina">+</button>
+                    </div>
+                </div>
+
+                <!-- Proveedor -->
+                <div class="form-group">
+                    <label class="form-label">Proveedor</label>
+                    <div style="display:flex; gap:0.5rem;">
+                        <select id="proveedor_id" class="form-control" style="flex:1;">
+                            <option value="">-- Seleccionar --</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="abrirModal('modal-proveedor')" title="Agregar nuevo proveedor">+</button>
+                    </div>
+                </div>
+
+                <!-- Denominación de la Adquisición -->
+                <div class="form-group full-width">
+                    <label class="form-label">
+                        Denominación de la Adquisición <span class="req">*</span>
+                    </label>
+                    <input type="text" id="denominacion_adquisicion" class="form-control"
+                           placeholder="Ej: ADQUISICIÓN DE IMPRESORAS MULTIFUNCIONALES PARA LA SUBGERENCIA DE LOGÍSTICA"
+                           required>
+                </div>
+
+                <!-- Meta presupuestal / Año fiscal -->
+                <div class="form-group">
+                    <label class="form-label">Meta Presupuestal / Año</label>
+                    <div style="display:flex; gap:0.5rem;">
+                        <input type="text" id="meta_codigo" class="form-control"
+                               placeholder="Meta (ej: 0039)" style="flex:1;">
+                        <input type="number" id="anio_fiscal" class="form-control"
+                               value="2026" style="width:100px;">
+                    </div>
+                </div>
+
+                <!-- Adjunto del documento físico -->
+                <div class="form-group">
+                    <label class="form-label">Adjunto del Documento Recibido</label>
+                    <input type="file" id="documento_adjunto" class="form-control"
+                           accept=".pdf,.jpg,.jpeg,.png,.webp">
+                    <span class="form-help">PDF, foto o escaneo del documento (opcional, recomendado)</span>
+                </div>
+
+                <!-- Finalidad / Objetivo (opcional) -->
+                <div class="form-group full-width">
+                    <label class="form-label">Finalidad / Objetivo de la Contratación <span style="color:var(--text-muted); font-weight:400;">(opcional)</span></label>
+                    <textarea id="finalidad_publica" class="form-control" rows="2"
+                              placeholder="Solo si figura en el documento. Dejar en blanco si no aplica."></textarea>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         CARD 2: ÍTEMS DEL PEDIDO
+         ══════════════════════════════════════════════════════════ -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 class="card-title">📦 Ítems del Pedido</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="agregarFilaItem()">
+                ➕ Agregar otro Ítem
+            </button>
+        </div>
+        <div class="card-body" style="padding:0;">
+            <div class="alert alert-info" style="margin:1rem 1rem 0; font-size:0.85rem;">
+                ℹ️ Registre cada bien tal como aparece en la ET física. Las características técnicas detalladas
+                se completarán <strong>después</strong>, al crear la Ficha Técnica de cada bien.
+            </div>
+            <div class="table-wrap" style="border:none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="min-width:180px;">Tipo de Bien <span class="req">*</span></th>
+                            <th>Descripción <span class="req">*</span></th>
+                            <th style="width:90px;" class="text-center">Cant. <span class="req">*</span></th>
+                            <th style="width:110px;">Unidad</th>
+                            <th style="width:130px;">Clasificador</th>
+                            <th style="width:50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTONES FINALES -->
+    <div style="display:flex; justify-content:flex-end; gap:1rem; margin-bottom:3rem;">
+        <a href="{{ url_for('especificaciones.pagina_lista') }}" class="btn btn-secondary">Cancelar</a>
+        <button type="button" id="btn-guardar-ref" class="btn btn-primary"
+                onclick="guardarEspecificacionReferencia()"
+                style="padding:0.75rem 2rem; font-size:1.05rem;">
+            💾 Registrar Especificación
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: NUEVA DEPENDENCIA
+     ══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-dependencia">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3 class="card-title">🏛️ Nueva Oficina / Dependencia</h3>
+            <button class="modal-close" onclick="cerrarModal('modal-dependencia')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Nombre <span class="req">*</span></label>
+                <input type="text" id="modal-dep-nombre" class="form-control"
+                       placeholder="Ej: SUBGERENCIA DE LOGÍSTICA">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Edificio / Ubicación</label>
+                <input type="text" id="modal-dep-edificio" class="form-control"
+                       placeholder="Ej: Palacio Municipal">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Pabellón / Piso</label>
+                <input type="text" id="modal-dep-pabellon" class="form-control"
+                       placeholder="Ej: Piso 2">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modal-dependencia')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarDependenciaModal()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: NUEVO PROVEEDOR -->
+<div class="modal-overlay" id="modal-proveedor">
+    <div class="modal" style="max-width:550px;">
+        <div class="modal-header">
+            <h3 class="card-title">🏢 Nuevo Proveedor</h3>
+            <button class="modal-close" onclick="cerrarModal('modal-proveedor')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">RUC <span class="req">*</span></label>
+                    <input type="text" id="modal-prov-ruc" class="form-control"
+                           maxlength="11" placeholder="11 dígitos">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Razón Social <span class="req">*</span></label>
+                    <input type="text" id="modal-prov-razon" class="form-control"
+                           placeholder="Ej: INVERSIONES SISTEMAS S.A.C.">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Dirección</label>
+                    <input type="text" id="modal-prov-direccion" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" id="modal-prov-telefono" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Correo Electrónico</label>
+                    <input type="email" id="modal-prov-correo" class="form-control">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modal-proveedor')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarProveedorModal()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: NUEVO TIPO DE BIEN -->
+<div class="modal-overlay" id="modal-tipo-bien">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 class="card-title">📦 Nuevo Tipo de Bien</h3>
+            <button class="modal-close" onclick="cerrarModal('modal-tipo-bien')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Nombre <span class="req">*</span></label>
+                <input type="text" id="modal-tb-nombre" class="form-control"
+                       placeholder="Ej: ESCRITORIO DE MADERA">
+            </div>
+            <div class="form-group">
+                <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                    <input type="checkbox" id="modal-tb-requiere-serie" checked
+                           style="width:18px; height:18px;">
+                    <span>Requiere <strong>Número de Serie</strong></span>
+                </label>
+                <span class="form-help">Desmarcar para mobiliario, sillas, escritorios u otros bienes sin serie.</span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modal-tipo-bien')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarTipoBienModal()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/especificacion_referencia.js') }}"></script>
+{% endblock %}

@@ -6,11 +6,17 @@
     <div class="page-header">
         <div>
             <h2>📋 Especificaciones Técnicas</h2>
-            <p>Listado de todas las especificaciones registradas</p>
+            <p>Registro de pedidos de compra y especificaciones recibidas</p>
         </div>
-        <a href="{{ url_for('especificaciones.pagina_nueva') }}" class="btn btn-primary">
-            ➕ Nueva Especificación
-        </a>
+        <div style="display:flex; gap:0.5rem;">
+            <a href="{{ url_for('especificaciones.pagina_nueva') }}" class="btn btn-primary">
+                📥 Registrar ET Recibida
+            </a>
+            <a href="{{ url_for('especificaciones.pagina_nueva_interna') }}" class="btn btn-secondary"
+               title="Solo cuando la OGTI redacta la ET desde cero (caso poco frecuente)">
+                📝 Redactar ET Interna
+            </a>
+        </div>
     </div>
 
     <div class="card">
@@ -23,9 +29,9 @@
                             <th>N° Pedido</th>
                             <th>Denominación</th>
                             <th>Fecha</th>
-                            <th>Centro de Costo</th>
-                            <th>Ítems</th>
-                            <th>Creado por</th>
+                            <th>Oficina</th>
+                            <th class="text-center">Ítems</th>
+                            <th>Origen</th>
                             <th>Estado</th>
                             <th></th>
                         </tr>
@@ -34,11 +40,17 @@
                         {% for et in especificaciones %}
                         <tr>
                             <td><strong>{{ et.numero_pedido }}</strong></td>
-                            <td>{{ et.denominacion_adquisicion|truncate(40) if et.denominacion_adquisicion else '-' }}</td>
+                            <td>{{ et.denominacion_adquisicion|truncate(45) if et.denominacion_adquisicion else '-' }}</td>
                             <td class="text-sm">{{ et.fecha_pedido.strftime('%d/%m/%Y') if et.fecha_pedido else '-' }}</td>
-                            <td>{{ et.centro_costo_nombre or '-' }}</td>
-                            <td>{{ et.total_items }}</td>
-                            <td class="text-sm text-muted">{{ et.creado_por_nombre }}</td>
+                            <td class="text-sm">{{ et.centro_costo_nombre or '-' }}</td>
+                            <td class="text-center">{{ et.total_items }}</td>
+                            <td>
+                                {% if et.origen == 'REFERENCIA_EXTERNA' %}
+                                <span class="badge" style="background:var(--info-bg, #e0f2fe); color:var(--info-text, #0369a1); font-size:0.7rem;">Física</span>
+                                {% else %}
+                                <span class="badge" style="background:var(--warning-bg, #fef3c7); color:var(--warning-text, #92400e); font-size:0.7rem;">Interna</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if et.estado == 'FINALIZADA' %}
                                 <span class="badge badge-success">Finalizada</span>
@@ -61,9 +73,14 @@
             <div class="empty-state">
                 <div class="icon">📋</div>
                 <p>No hay especificaciones técnicas registradas</p>
-                <a href="{{ url_for('especificaciones.pagina_nueva') }}" class="btn btn-primary mt-2">
-                    ➕ Nueva Especificación
-                </a>
+                <div style="display:flex; gap:0.5rem; justify-content:center; margin-top:0.75rem;">
+                    <a href="{{ url_for('especificaciones.pagina_nueva') }}" class="btn btn-primary">
+                        📥 Registrar ET Recibida
+                    </a>
+                    <a href="{{ url_for('especificaciones.pagina_nueva_interna') }}" class="btn btn-secondary">
+                        📝 Redactar ET Interna
+                    </a>
+                </div>
             </div>
             {% endif %}
         </div>

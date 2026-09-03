@@ -193,10 +193,10 @@ def crear_responsable():
 @catalogos_bp.route('/api/tipos-bien', methods=['GET'])
 @login_required
 def listar_tipos_bien():
-    """Lista todos los tipos de bien con sus características típicas."""
+    """Lista todos los tipos de bien con sus características típicas y flag requiere_serie."""
     tipos = query(
         """
-        SELECT id, nombre, caracteristicas_tipicas
+        SELECT id, nombre, caracteristicas_tipicas, requiere_serie
         FROM tipos_bien
         WHERE activo = TRUE
         ORDER BY nombre
@@ -208,7 +208,7 @@ def listar_tipos_bien():
 @catalogos_bp.route('/api/tipos-bien', methods=['POST'])
 @login_required
 def crear_tipo_bien():
-    """Registra un nuevo tipo de bien con sus características típicas."""
+    """Registra un nuevo tipo de bien con sus características típicas y flag requiere_serie."""
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
 
@@ -217,14 +217,15 @@ def crear_tipo_bien():
 
     import json
     caracteristicas = data.get('caracteristicas_tipicas', [])
+    requiere_serie = bool(data.get('requiere_serie', True))
 
     resultado = execute(
         """
-        INSERT INTO tipos_bien (nombre, caracteristicas_tipicas)
-        VALUES (%s, %s::jsonb)
-        RETURNING id, nombre, caracteristicas_tipicas
+        INSERT INTO tipos_bien (nombre, caracteristicas_tipicas, requiere_serie)
+        VALUES (%s, %s::jsonb, %s)
+        RETURNING id, nombre, caracteristicas_tipicas, requiere_serie
         """,
-        (nombre, json.dumps(caracteristicas)),
+        (nombre, json.dumps(caracteristicas), requiere_serie),
         returning=True
     )
     return jsonify(resultado), 201

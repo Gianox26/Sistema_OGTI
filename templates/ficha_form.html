@@ -98,13 +98,17 @@
                     <input type="text" id="ft-color" class="form-control"
                            placeholder="Ej: NEGRO (ACABADO MATE)">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">
+
+                <!-- Bloque Dinámico de Números de Serie según la cantidad del ítem -->
+                <div class="form-group full-width" id="contenedor-bloque-series">
+                    <label class="form-label" id="lbl-serie">
                         Número de Serie <span class="req">*</span>
                     </label>
-                    <input type="text" id="ft-serie" class="form-control"
-                           placeholder="Ej: ADV1253S205126030423"
-                           oninput="validarSerieAjax()">
+                    <div id="contenedor-series-dinamicas" class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;">
+                        <input type="text" id="ft-serie" class="form-control ft-serie-input"
+                               placeholder="Ej: ADV1253S205126030423"
+                               oninput="validarSerieAjax()">
+                    </div>
                     <span id="serie-feedback" class="form-help"></span>
                 </div>
                 <div class="form-group">

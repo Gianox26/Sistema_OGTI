@@ -23,12 +23,13 @@ document.addEventListener('DOMContentLoaded', function () {
     cargarResponsables();
     cargarProveedoresFT();
 
-    // Listener para buscar plantilla si ingresan marca y modelo
+    // Listener para buscar plantilla automáticamente al ingresar marca y modelo
     const marcaEl = document.getElementById('ft-marca');
     const modeloEl = document.getElementById('ft-modelo');
     if (marcaEl && modeloEl) {
-        marcaEl.addEventListener('blur', verificarPlantillaExistente);
-        modeloEl.addEventListener('blur', verificarPlantillaExistente);
+        marcaEl.addEventListener('blur', () => verificarPlantillaExistente(false));
+        modeloEl.addEventListener('blur', () => verificarPlantillaExistente(false));
+        modeloEl.addEventListener('change', () => verificarPlantillaExistente(false));
     }
 
     // Pre-seleccionar ET si viene por query param
@@ -114,7 +115,7 @@ function cargarDatosItem() {
                 }
             }
 
-            // Mostrar las secciones ocultas
+            // Mostrar SIEMPRE todas las secciones del formulario
             document.getElementById('paso-datos-heredados').classList.remove('hidden');
             document.getElementById('paso-datos-manuales').classList.remove('hidden');
             document.getElementById('paso-caracteristicas').classList.remove('hidden');
@@ -122,6 +123,10 @@ function cargarDatosItem() {
             document.getElementById('paso-checklist').classList.remove('hidden');
             document.getElementById('paso-acciones').classList.remove('hidden');
             document.getElementById('paso-acciones').style.display = 'flex';
+
+            // Renderizar campos dinámicos de series según la cantidad requerida en el ítem de la ET
+            const cantItem = Math.round(parseFloat(itemSeleccionado.cantidad) || 1);
+            renderizarCamposSeries(cantItem, true);
 
             // Mostrar características del ítem en datos heredados
             const charsContainer = document.getElementById('h-caracteristicas');
@@ -142,7 +147,35 @@ function cargarDatosItem() {
 
             // Renderizar características editables
             renderCaracteristicasEditables(chars);
+
+            // Verificar si el tipo de bien exige número de serie
+            if (itemSeleccionado && itemSeleccionado.tipo_bien_id) {
+                actualizarFormatoSerie(itemSeleccionado.tipo_bien_id);
+            }
         });
+}
+
+function actualizarFormatoSerie(tipoBienId) {
+    if (!tipoBienId) return;
+    fetch('/api/tipos-bien')
+        .then(r => r.json())
+        .then(tipos => {
+            const tb = tipos.find(t => t.id == tipoBienId);
+            const feedbackSerie = document.getElementById('serie-feedback');
+            const cantItem = itemSeleccionado ? Math.round(parseFloat(itemSeleccionado.cantidad) || 1) : 1;
+            const requiere = tb ? (tb.requiere_serie !== false) : true;
+
+            renderizarCamposSeries(cantItem, requiere);
+
+            if (feedbackSerie) {
+                if (!requiere) {
+                    feedbackSerie.innerHTML = '<span class="text-muted">ℹ️ Este tipo de bien no exige número de serie obligatorio.</span>';
+                } else {
+                    feedbackSerie.innerHTML = '';
+                }
+            }
+        })
+        .catch(err => console.log('Error actualizando formato serie:', err));
 }
 
 // ============================================================
@@ -415,24 +448,31 @@ function actualizarChecklist() {
 function guardarFicha() {
     const etId = document.getElementById('et-selector').value;
     const itemId = document.getElementById('item-selector').value;
-    const serie = document.getElementById('ft-serie').value.trim();
 
     if (!etId || !itemId) {
         alert('Seleccione una Especificación Técnica y un ítem');
         return;
     }
 
+    const seriesInputs = document.querySelectorAll('.ft-serie-input');
+    const seriesVals = Array.from(seriesInputs).map(inp => ({
+        numero_serie: inp.value.trim(),
+        estado_fisico: 'NUEVO'
+    }));
+
     const provIdEl = document.getElementById('ft-proveedor-id');
+    const checklistData = recopilarChecklist();
+    const charsData = (recopilarCaracteristicasFT().length > 0) 
+        ? recopilarCaracteristicasFT() 
+        : (itemSeleccionado ? (itemSeleccionado.caracteristicas || []) : []);
 
     const body = {
         especificacion_id: parseInt(etId),
         item_id: parseInt(itemId),
+        finalizar: false,
         marca: document.getElementById('ft-marca').value.trim(),
         modelo: document.getElementById('ft-modelo').value.trim(),
         color: document.getElementById('ft-color').value.trim(),
-        numero_serie: serie,
-        estado_fisico: 'NUEVO',
-        observaciones: document.getElementById('ft-observaciones').value.trim(),
         carta_levantamiento: document.getElementById('ft-carta').value.trim(),
         guia_remision: document.getElementById('ft-guia-remision').value.trim(),
         responsable_id: document.getElementById('ft-responsable').value || null,
@@ -440,25 +480,20 @@ function guardarFicha() {
         proveedor_razon: document.getElementById('ft-proveedor-nombre').value.trim(),
         proveedor_direccion: document.getElementById('ft-proveedor-dir').value.trim(),
         proveedor_telefono: document.getElementById('ft-proveedor-tel').value.trim(),
+        proveedor_correo: document.getElementById('ft-proveedor-correo').value.trim(),
+        observaciones: document.getElementById('ft-observaciones').value.trim(),
         orden_compra: document.getElementById('ft-orden-compra').value.trim(),
         costo: document.getElementById('ft-costo').value
                   ? parseFloat(document.getElementById('ft-costo').value) : null,
         fecha_adquisicion: document.getElementById('ft-fecha-adquisicion').value || null,
         garantia: document.getElementById('ft-garantia').value.trim(),
-        caracteristicas_verificadas: (recopilarCaracteristicasFT().length > 0) 
-            ? recopilarCaracteristicasFT() 
-            : (itemSeleccionado ? (itemSeleccionado.caracteristicas || []) : []),
+        caracteristicas_verificadas: charsData,
+        checklist: checklistData,
+        series: seriesVals
     };
 
-    // Recopilar estado del checklist dinámico
-    const checklistData = recopilarChecklist();
-    body.checklist = checklistData;
-
-    const url = fichaId ? `/api/fichas/${fichaId}` : '/api/fichas';
-    const method = fichaId ? 'PUT' : 'POST';
-
-    fetch(url, {
-        method: method,
+    fetch('/api/fichas/carga-masiva', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     })
@@ -468,11 +503,7 @@ function guardarFicha() {
             alert(data.error || 'Error al guardar');
             return;
         }
-        if (!fichaId && data.id) {
-            fichaId = data.id;
-            document.getElementById('btn-guardar-ft').textContent = '💾 Actualizar Borrador';
-        }
-        alert(fichaId ? 'Ficha actualizada correctamente' : 'Ficha guardada como borrador');
+        alert(seriesVals.length > 1 ? `Se guardaron ${seriesVals.length} borradores de Ficha Técnica` : 'Ficha guardada como borrador');
     })
     .catch(err => {
         console.error('Error al guardar ficha:', err);
@@ -493,39 +524,133 @@ function recopilarChecklist() {
 }
 
 // ============================================================
-// Finalizar
+// Finalizar Ficha(s) Técnica(s)
 // ============================================================
 
 function finalizarFicha() {
-    if (!fichaId) {
-        alert('Primero guarde la ficha como borrador');
+    const etId = document.getElementById('et-selector').value;
+    const itemId = document.getElementById('item-selector').value;
+
+    if (!etId || !itemId) {
+        alert('Seleccione una Especificación Técnica y un ítem');
         return;
     }
 
+    const seriesInputs = document.querySelectorAll('.ft-serie-input');
+    const seriesVals = Array.from(seriesInputs).map(inp => ({
+        numero_serie: inp.value.trim(),
+        estado_fisico: 'NUEVO'
+    }));
+
+    const marca = document.getElementById('ft-marca').value.trim();
+    const modelo = document.getElementById('ft-modelo').value.trim();
+
+    if (!marca || !modelo) {
+        alert('Debe ingresar la Marca y Modelo del bien recibido.');
+        return;
+    }
+
+    const cant = seriesVals.length;
+    const confirmMsg = cant > 1 
+        ? `¿Finalizar las ${cant} Fichas Técnicas? Se asignarán números correlativos permanentes y no se podrán editar.`
+        : `¿Finalizar esta Ficha Técnica? Se asignará un número correlativo permanente y no se podrá editar.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const provIdEl = document.getElementById('ft-proveedor-id');
     const checklistData = recopilarChecklist();
+    const charsData = (recopilarCaracteristicasFT().length > 0) 
+        ? recopilarCaracteristicasFT() 
+        : (itemSeleccionado ? (itemSeleccionado.caracteristicas || []) : []);
 
-    // Actualizar checklist primero
-    fetch(`/api/fichas/${fichaId}`, {
-        method: 'PUT',
+    const body = {
+        especificacion_id: parseInt(etId),
+        item_id: parseInt(itemId),
+        finalizar: true,
+        marca: marca,
+        modelo: modelo,
+        color: document.getElementById('ft-color').value.trim(),
+        carta_levantamiento: document.getElementById('ft-carta').value.trim(),
+        guia_remision: document.getElementById('ft-guia-remision').value.trim(),
+        responsable_id: document.getElementById('ft-responsable').value || null,
+        proveedor_id: (provIdEl && provIdEl.value) ? parseInt(provIdEl.value) : null,
+        proveedor_razon: document.getElementById('ft-proveedor-nombre').value.trim(),
+        proveedor_direccion: document.getElementById('ft-proveedor-dir').value.trim(),
+        proveedor_telefono: document.getElementById('ft-proveedor-tel').value.trim(),
+        proveedor_correo: document.getElementById('ft-proveedor-correo').value.trim(),
+        observaciones: document.getElementById('ft-observaciones').value.trim(),
+        orden_compra: document.getElementById('ft-orden-compra').value.trim(),
+        costo: document.getElementById('ft-costo').value
+                  ? parseFloat(document.getElementById('ft-costo').value) : null,
+        fecha_adquisicion: document.getElementById('ft-fecha-adquisicion').value || null,
+        garantia: document.getElementById('ft-garantia').value.trim(),
+        caracteristicas_verificadas: charsData,
+        checklist: checklistData,
+        series: seriesVals
+    };
+
+    const btnFinalizar = document.getElementById('btn-finalizar-ft');
+    if (btnFinalizar) {
+        btnFinalizar.disabled = true;
+        btnFinalizar.textContent = '⏳ Finalizando...';
+    }
+
+    fetch('/api/fichas/carga-masiva', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checklist: checklistData }),
-    }).then(() => {
-        // Luego finalizar
-        if (!confirm('¿Finalizar esta Ficha Técnica? Se asignará un número correlativo permanente y no se podrá editar.')) return;
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json().then(data => ({ status: r.status, data })))
+    .then(({ status, data }) => {
+        if (status >= 400) {
+            alert('⚠️ ' + (data.error || 'Error al finalizar'));
+            if (btnFinalizar) {
+                btnFinalizar.disabled = false;
+                btnFinalizar.textContent = cant > 1 ? `🔒 Finalizar ${cant} Fichas Técnicas` : '🔒 Finalizar Ficha Técnica';
+            }
+            return;
+        }
 
-        fetch(`/api/fichas/${fichaId}/finalizar`, { method: 'POST' })
-            .then(r => r.json().then(data => ({ status: r.status, data })))
-            .then(({ status, data }) => {
-                if (status >= 400) {
-                    alert(data.error || 'Error al finalizar');
-                    if (data.casillas_faltantes) {
-                        alert('Casillas faltantes: ' + data.casillas_faltantes.join(', '));
-                    }
-                    return;
-                }
-                alert(`Ficha Técnica finalizada exitosamente\nN° Correlativo: ${data.numero_correlativo}`);
-                window.location.href = `/fichas/${fichaId}`;
-            });
+        let downloadUrl = '';
+        if (cant === 1 && data.fichas && data.fichas.length > 0) {
+            downloadUrl = `/api/fichas/${data.fichas[0].id}/documento`;
+        } else {
+            downloadUrl = `/api/especificaciones/${etId}/fichas/zip`;
+        }
+
+        // Iniciar descarga automática del documento Word o ZIP
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = downloadUrl;
+        downloadAnchor.download = '';
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        document.body.removeChild(downloadAnchor);
+
+        let msgFinal = cant === 1 
+            ? `🎉 Ficha Técnica finalizada exitosamente.\nN° Correlativo: ${data.fichas[0].correlativo_formateado}\n\n📄 La descarga del documento Word (.docx) ha comenzado automáticamente.`
+            : `🎉 ¡${cant} Fichas Técnicas finalizadas exitosamente!\n\n📦 La descarga del archivo comprimido (.ZIP) con todas las Fichas Técnicas ha comenzado automáticamente.`;
+
+        if (data.et_finalizada) {
+            msgFinal += `\n\n✅ ¡Todos los ítems han sido completados! La Especificación Técnica ha cambiado automáticamente su estado a FINALIZADA.`;
+        }
+
+        alert(msgFinal);
+
+        setTimeout(() => {
+            if (cant === 1 && data.fichas && data.fichas.length > 0) {
+                window.location.href = `/fichas/${data.fichas[0].id}`;
+            } else {
+                window.location.href = '/fichas';
+            }
+        }, 1200);
+    })
+    .catch(err => {
+        console.error('Error al finalizar fichas:', err);
+        if (btnFinalizar) {
+            btnFinalizar.disabled = false;
+            btnFinalizar.textContent = cant > 1 ? `🔒 Finalizar ${cant} Fichas Técnicas` : '🔒 Finalizar Ficha Técnica';
+        }
+        alert('Error de conexión al finalizar');
     });
 }
 
@@ -806,5 +931,45 @@ function verificarPlantillaExistente(forzarNotificacion = false) {
         })
         .catch(err => console.log('Error en Cache-Aside:', err));
 }
+
+
+// ============================================================
+// Renderizado dinámico de campos de Series según cantidad del ítem
+// ============================================================
+
+function renderizarCamposSeries(cant, requiereSerie = true) {
+    const contenedor = document.getElementById('contenedor-series-dinamicas');
+    const lbl = document.getElementById('lbl-serie');
+    const btnFinalizar = document.getElementById('btn-finalizar-ft');
+
+    if (!contenedor) return;
+
+    if (cant > 1) {
+        if (lbl) lbl.innerHTML = `Número(s) de Serie (${cant} Unidades) ${requiereSerie ? '<span class="req">*</span>' : ''}`;
+        if (btnFinalizar) btnFinalizar.textContent = `🔒 Finalizar ${cant} Fichas Técnicas`;
+
+        let html = '';
+        for (let i = 1; i <= cant; i++) {
+            html += `
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="text-sm font-semibold" style="display:block; margin-bottom: 0.25rem; font-size: 0.825rem; color: var(--text-color, #374151);">Unidad #${i} ${requiereSerie ? '<span class="req">*</span>' : ''}</label>
+                    <input type="text" class="form-control ft-serie-input" data-index="${i}"
+                           placeholder="${requiereSerie ? 'Ej: ADV1253S20512603...' : 'Opcional / Cod. Patrimonial'}">
+                </div>
+            `;
+        }
+        contenedor.innerHTML = html;
+    } else {
+        if (lbl) lbl.innerHTML = `Número de Serie ${requiereSerie ? '<span class="req">*</span>' : ''}`;
+        if (btnFinalizar) btnFinalizar.textContent = `🔒 Finalizar Ficha Técnica`;
+
+        contenedor.innerHTML = `
+            <input type="text" id="ft-serie" class="form-control ft-serie-input"
+                   placeholder="${requiereSerie ? 'Ej: ADV1253S205126030423' : 'Opcional o Código Patrimonial'}"
+                   oninput="validarSerieAjax()">
+        `;
+    }
+}
+
 
 

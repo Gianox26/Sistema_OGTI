@@ -15,6 +15,11 @@
                 {% else %}
                 <span class="badge badge-draft">Borrador</span>
                 {% endif %}
+                {% if et.origen == 'REFERENCIA_EXTERNA' %}
+                <span class="badge" style="background:var(--info-bg, #e0f2fe); color:var(--info-text, #0369a1); font-size:0.7rem;">Física</span>
+                {% else %}
+                <span class="badge" style="background:var(--warning-bg, #fef3c7); color:var(--warning-text, #92400e); font-size:0.7rem;">Interna</span>
+                {% endif %}
                 — Creada por {{ et.creado_por_nombre }}
             </p>
         </div>
@@ -22,11 +27,15 @@
             {% if et.estado == 'FINALIZADA' %}
             <a href="{{ url_for('especificaciones.descargar_documento_et', id=et.id) }}"
                class="btn btn-primary">
-                📥 Descargar Word
+                📥 Descargar Word ET
             </a>
             <a href="{{ url_for('fichas.pagina_nueva') }}?et_id={{ et.id }}"
                class="btn btn-success">
                 ➕ Crear Ficha Técnica
+            </a>
+            <a href="{{ url_for('fichas.descargar_fichas_et_zip', et_id=et.id) }}"
+               class="btn btn-secondary" title="Descargar todas las Fichas Técnicas finalizadas en un archivo .ZIP">
+                📦 Descargar Fichas (.ZIP)
             </a>
             {% elif et.estado == 'BORRADOR' %}
             <a href="{{ url_for('especificaciones.pagina_editar', id=et.id) }}"
@@ -89,33 +98,41 @@
                     <input type="text" class="form-control"
                            value="{% if et.razon_social %}{{ et.razon_social }} (RUC: {{ et.ruc }}){% else %}-{% endif %}" readonly>
                 </div>
+                {% if et.documento_adjunto %}
+                <div class="form-group full-width">
+                    <label class="form-label">📎 Documento Adjunto</label>
+                    <a href="{{ url_for('static', filename=et.documento_adjunto) }}" target="_blank"
+                       class="btn btn-secondary btn-sm" style="width:fit-content;">
+                        📄 Ver / Descargar Documento Físico Escaneado
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Card 2: Finalidad Pública (auto-generated) -->
+    <!-- Card 2 y 3: Finalidad y Objetivo (solo si hay contenido) -->
+    {% if finalidad_auto or objetivo_auto %}
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">🎯 Finalidad Pública</h3>
+            <h3 class="card-title">🎯 Finalidad Pública y Objetivo</h3>
         </div>
         <div class="card-body">
+            {% if finalidad_auto %}
             <div class="form-group full-width">
-                <textarea class="form-control" readonly rows="3">{{ finalidad_auto or '-' }}</textarea>
+                <label class="form-label">Finalidad Pública</label>
+                <textarea class="form-control" readonly rows="3">{{ finalidad_auto }}</textarea>
             </div>
+            {% endif %}
+            {% if objetivo_auto %}
+            <div class="form-group full-width">
+                <label class="form-label">Objetivo de la Contratación</label>
+                <textarea class="form-control" readonly rows="3">{{ objetivo_auto }}</textarea>
+            </div>
+            {% endif %}
         </div>
     </div>
-
-    <!-- Card 3: Objetivo de la Contratación (auto-generated) -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">📌 Objetivo de la Contratación</h3>
-        </div>
-        <div class="card-body">
-            <div class="form-group full-width">
-                <textarea class="form-control" readonly rows="3">{{ objetivo_auto or '-' }}</textarea>
-            </div>
-        </div>
-    </div>
+    {% endif %}
 
     <!-- Card 4: Ítems del Pedido -->
     <div class="card">

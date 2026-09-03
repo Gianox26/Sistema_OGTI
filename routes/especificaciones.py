@@ -34,7 +34,8 @@ def pagina_lista():
         """
         SELECT et.id, et.numero_pedido, et.fecha_pedido,
                et.denominacion_adquisicion,
-               et.anio_fiscal, et.estado, et.fecha_creacion, et.fecha_finalizacion,
+               et.anio_fiscal, et.estado, et.origen,
+               et.fecha_creacion, et.fecha_finalizacion,
                d.nombre AS centro_costo_nombre,
                ao.codigo AS actividad_codigo, ao.nombre AS actividad_nombre,
                p.razon_social AS proveedor_nombre,
@@ -55,7 +56,14 @@ def pagina_lista():
 @especificaciones_bp.route('/especificaciones/nueva')
 @login_required
 def pagina_nueva():
-    """Formulario de nueva Especificación Técnica."""
+    """Pantalla principal: Registro por Referencia de Especificación Técnica recibida (físico)."""
+    return render_template('especificacion_referencia.html')
+
+
+@especificaciones_bp.route('/especificaciones/nueva-interna')
+@login_required
+def pagina_nueva_interna():
+    """Pantalla secundaria: Redacción Interna Completa de Especificación Técnica."""
     return render_template('especificacion_form.html', especificacion=None)
 
 
@@ -159,12 +167,12 @@ def crear_especificacion():
 
     # Verificar que el número de pedido no esté duplicado
     existente = query(
-        "SELECT id FROM especificaciones_tecnicas WHERE numero_pedido = %s",
-        (numero_pedido,),
+        "SELECT id FROM especificaciones_tecnicas WHERE numero_pedido = %s AND anio_fiscal = %s",
+        (numero_pedido, anio_fiscal),
         fetchone=True
     )
     if existente:
-        return jsonify({'error': f'Ya existe una ET con pedido N° {numero_pedido}'}), 409
+        return jsonify({'error': f'Ya existe una ET con pedido N° {numero_pedido} para el año {anio_fiscal}'}), 409
 
     # Meta-año: combinar código meta + año
     meta_codigo = data.get('meta_codigo', '').strip()
@@ -195,6 +203,102 @@ def crear_especificacion():
     )
 
     return jsonify(resultado), 201
+
+
+@especificaciones_bp.route('/api/especificaciones/referencia', methods=['POST'])
+@login_required
+def crear_especificacion_referencia():
+    """
+    Registra una Especificación Técnica recibida en físico (REFERENCIA_EXTERNA).
+    Procesa campos multipart/form-data, adjunto escaneado e ítems del pedido.
+    """
+    numero_pedido = (request.form.get('numero_pedido', '') or '').strip()
+    fecha_pedido = request.form.get('fecha_pedido', '')
+    denominacion = (request.form.get('denominacion_adquisicion', '') or '').strip()
+
+    if not numero_pedido:
+        return jsonify({'error': 'El número de pedido es obligatorio'}), 400
+    if not fecha_pedido:
+        return jsonify({'error': 'La fecha del pedido es obligatoria'}), 400
+    if not denominacion:
+        return jsonify({'error': 'La denominación de la adquisición es obligatoria'}), 400
+
+    anio_fiscal = int(fecha_pedido.split('-')[0]) if '-' in fecha_pedido else datetime.now().year
+    existente = query(
+        "SELECT id FROM especificaciones_tecnicas WHERE numero_pedido = %s AND anio_fiscal = %s",
+        (numero_pedido, anio_fiscal), fetchone=True
+    )
+    if existente:
+        return jsonify({'error': f'Ya existe un registro con pedido N° {numero_pedido} para el año {anio_fiscal}'}), 409
+
+    # Procesar archivo adjunto si se envió
+    adjunto_path = None
+    if 'documento_adjunto' in request.files:
+        file = request.files['documento_adjunto']
+        if file and file.filename:
+            upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'et_documentos')
+            os.makedirs(upload_dir, exist_ok=True)
+            filename = secure_filename(f"et_ref_{numero_pedido}_{file.filename}")
+            filepath = os.path.join(upload_dir, filename)
+            file.save(filepath)
+            adjunto_path = f"uploads/et_documentos/{filename}"
+
+    # Meta-año
+    meta_codigo = (request.form.get('meta_codigo', '') or '').strip()
+    anio_fiscal = request.form.get('anio_fiscal', type=int) or (int(fecha_pedido.split('-')[0]) if '-' in fecha_pedido else datetime.now().year)
+    meta_anio = f"{meta_codigo}-{anio_fiscal}" if meta_codigo else ''
+
+    # Insertar ET con origen REFERENCIA_EXTERNA y estado FINALIZADA
+    res_et = execute(
+        """
+        INSERT INTO especificaciones_tecnicas
+            (numero_pedido, fecha_pedido, denominacion_adquisicion,
+             centro_costo_id, proveedor_id, meta_anio, anio_fiscal,
+             origen, estado, documento_adjunto, creado_por, finalizado_por, fecha_finalizacion)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'REFERENCIA_EXTERNA', 'FINALIZADA', %s, %s, %s, NOW())
+        RETURNING id, numero_pedido
+        """,
+        (
+            numero_pedido,
+            fecha_pedido,
+            denominacion,
+            request.form.get('centro_costo_id') or None,
+            request.form.get('proveedor_id') or None,
+            meta_anio,
+            anio_fiscal,
+            adjunto_path,
+            session['usuario_id'],
+            session['usuario_id'],
+        ),
+        returning=True
+    )
+
+    et_id = res_et['id']
+
+    # Insertar ítems del pedido
+    items_json = request.form.get('items', '[]')
+    try:
+        items = json.loads(items_json)
+        for it in items:
+            execute(
+                """
+                INSERT INTO items_especificacion
+                    (especificacion_id, tipo_bien_id, descripcion, cantidad, unidad_medida, clasificador)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    et_id,
+                    it.get('tipo_bien_id'),
+                    it.get('descripcion', '').strip(),
+                    it.get('cantidad', 1),
+                    it.get('unidad_medida', 'UNIDAD').strip() or 'UNIDAD',
+                    it.get('clasificador', '').strip() or None
+                )
+            )
+    except Exception as e:
+        print("Error registrando ítems de ET referencia:", e)
+
+    return jsonify({'message': 'Especificación registrada exitosamente', 'id': et_id, 'numero_pedido': numero_pedido}), 201
 
 
 @especificaciones_bp.route('/api/especificaciones/<int:id>', methods=['PUT'])

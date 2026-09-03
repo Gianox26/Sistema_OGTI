@@ -229,10 +229,9 @@ def generar_ficha_tecnica(datos):
     if not isinstance(chars, list):
         chars = []
 
-    # Filtrar: solo características principales para el documento (1 página)
-    # Si el campo 'principal' no existe, se asume True (retrocompatibilidad)
-    chars_principales = [c for c in chars if c.get('principal', True)]
-    # Ordenar por el campo 'orden' si existe
+    chars_principales = [c for c in chars if c.get('principal', True) is not False]
+    if not chars_principales and chars:
+        chars_principales = chars
     chars_principales.sort(key=lambda c: c.get('orden', 999))
 
     titulo = f"CARACTERÍSTICAS DE {datos.get('bien_descripcion') or 'BIEN'}"
@@ -252,18 +251,37 @@ def generar_ficha_tecnica(datos):
     buffer.seek(0)
     doc = Document(buffer)
 
-    ocurrencias = [p for p in _iterar_parrafos_doc(doc) if SENTINEL in p.text]
+    ocurrencias = []
+    vistos_xml = set()
+    for p in _iterar_parrafos_doc(doc):
+        if SENTINEL in p.text and p._element not in vistos_xml:
+            ocurrencias.append(p)
+            vistos_xml.add(p._element)
+
     for n, p in enumerate(ocurrencias):
         if n == 0:
-            _escribir_bloque_caract(p, titulo, chars_principales)
+            _escribir_bloque_caract(p, titulo, chars_principales, doc)
         else:
             for r in list(p.runs):
+                r._element.getparent().remove(r._element)
                 r._element.getparent().remove(r._element)
 
     # Imagen referencial del bien (si la FT la incluye)
     imagen = datos.get('imagen_referencial')
     if imagen:
         _insertar_imagen_doc(doc, imagen)
+
+    # Forzar centrado vertical en las celdas de datos (ej: CARGO del responsable)
+    try:
+        from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+        for t_idx, t in enumerate(doc.tables):
+            for r_idx, row in enumerate(t.rows):
+                if t_idx == 1 and r_idx == 5:
+                    continue
+                for cell in row.cells:
+                    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    except Exception:
+        pass
 
     buffer = io.BytesIO()
     doc.save(buffer)
@@ -513,11 +531,17 @@ def _escribir_caracteristicas_tituladas(doc, titulo, chars, items=None):
     return None
 
 
-def _escribir_bloque_caract(p, titulo, chars):
+def _escribir_bloque_caract(p, titulo, chars, doc=None):
     """
     Escribe un bloque de características con encabezado en negrita
     (Ficha Técnica, un único bien). Century Gothic 9pt, alineado a la izquierda.
     """
+    if doc:
+        try:
+            p.style = doc.styles['Normal']
+        except Exception:
+            pass
+
     for r in list(p.runs):
         r._element.getparent().remove(r._element)
 
@@ -529,10 +553,14 @@ def _escribir_bloque_caract(p, titulo, chars):
 
     lineas = []
     for c in (chars or []):
-        nombre = c.get('nombre', '')
-        valor = c.get('valor', c.get('valor_sugerido', ''))
-        if nombre:
-            lineas.append(f"{nombre}: {valor}")
+        if isinstance(c, dict):
+            nombre = c.get('nombre', '')
+            valor = c.get('valor') or c.get('valor_sugerido') or ''
+            if nombre:
+                lineas.append(f"• {nombre}: {valor}")
+        elif isinstance(c, str) and c.strip():
+            lineas.append(f"• {c.strip()}")
+
     cuerpo = '\n'.join(lineas) if lineas else 'Sin características registradas.'
 
     r_cuer = p.add_run('\n' + cuerpo)
