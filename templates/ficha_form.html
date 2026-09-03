@@ -83,15 +83,17 @@
                     <input type="text" id="ft-marca" class="form-control"
                            placeholder="Ej: ADVANCE">
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="position: relative;">
                     <label class="form-label">Modelo <span class="req">*</span></label>
                     <div class="gap-row">
                         <input type="text" id="ft-modelo" class="form-control flex-1"
-                               placeholder="Ej: VISSION VM1470">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="buscarEspecificaciones()" title="Buscar especificaciones técnicas en Google">
-                            🔍 Buscar specs
+                               placeholder="Ej: VISSION VM1470"
+                               oninput="ocultarSugerenciasModelo()">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="corregirModelo()" title="Corregir el nombre del modelo">
+                            ✏️ Corregir
                         </button>
                     </div>
+                    <div id="sugerencias-modelo" class="sugerencias-dropdown"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Color</label>
@@ -187,14 +189,11 @@
     <div class="card hidden" id="paso-caracteristicas">
         <div class="card-header">
             <h3 class="card-title">⚙️ Características Técnicas del Bien Recibido</h3>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="buscarEspecificaciones()" title="Buscar en Google y en la web">
-                🔍 Buscar specs
-            </button>
         </div>
         <div class="card-body">
             <div class="alert alert-info">
-                ℹ️ A la <strong>izquierda</strong> puede <strong>editar las características</strong> según el bien que recibió físicamente (se cargan automáticamente desde la ET).
-                A la <strong>derecha</strong>, <strong>Firecrawl</strong> busca en la web las especificaciones del fabricante a partir de la <strong>marca y modelo</strong>; use ➕ para copiarlas al panel izquierdo.
+                ℹ️ Las características de la <strong>Especificación Técnica</strong> aparecen a continuación. Use <strong>✖</strong> para eliminar un campo si es necesario.
+                Para agregar specs desde la web, use el botón <strong>✏️ Corregir</strong> del campo Modelo.
             </div>
 
             <div class="ficha-dual">
@@ -258,26 +257,6 @@
                     <label class="form-label">Tiempo de Garantía</label>
                     <input type="text" id="ft-garantia" class="form-control"
                            placeholder="Ej: 12 meses">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Paso 4: Checklist de verificación basado en características de la ET -->
-    <div class="card hidden" id="paso-checklist">
-        <div class="card-header">
-            <h3 class="card-title">✅ Checklist de Verificación de Características</h3>
-        </div>
-        <div class="card-body">
-            <div class="alert alert-warning">
-                ⚠️ Verifique físicamente cada característica del bien recibido según lo especificado en la ET.
-                El botón "Finalizar" se habilitará cuando todas las casillas estén marcadas.
-            </div>
-            <div class="checklist">
-                <div class="checklist-title">🔍 Verificación de Características Técnicas</div>
-                <div class="checklist-grid" id="checklist-caracteristicas">
-                    <!-- Se genera dinámicamente desde ficha.js basado en las características de la ET -->
-                    <p class="text-muted text-sm">Seleccione un ítem para cargar el checklist de verificación.</p>
                 </div>
             </div>
         </div>

@@ -165,6 +165,8 @@ def crear_especificacion():
     if not fecha_pedido:
         return jsonify({'error': 'La fecha del pedido es obligatoria'}), 400
 
+    anio_fiscal = data.get('anio_fiscal', 2026)
+
     # Verificar que el número de pedido no esté duplicado
     existente = query(
         "SELECT id FROM especificaciones_tecnicas WHERE numero_pedido = %s AND anio_fiscal = %s",
@@ -176,7 +178,6 @@ def crear_especificacion():
 
     # Meta-año: combinar código meta + año
     meta_codigo = data.get('meta_codigo', '').strip()
-    anio_fiscal = data.get('anio_fiscal', 2026)
     meta_anio = f"{meta_codigo}-{anio_fiscal}" if meta_codigo else ''
 
     resultado = execute(

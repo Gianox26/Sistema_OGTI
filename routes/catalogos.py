@@ -405,6 +405,45 @@ def buscar_modelo_cache_aside():
     })
 
 
+@catalogos_bp.route('/api/catalogos/sugerir-modelo', methods=['GET'])
+@login_required
+def sugerir_modelo():
+    """
+    Busca modelos similares en el catálogo para corregir nombres mal escritos.
+    Usa búsqueda por similitud con ILIKE.
+    """
+    marca = (request.args.get('marca') or '').strip()
+    modelo = (request.args.get('modelo') or '').strip()
+
+    if not marca and not modelo:
+        return jsonify({'error': 'Marca o modelo son requeridos'}), 400
+
+    condiciones = []
+    params = []
+
+    if marca:
+        condiciones.append("UPPER(marca) LIKE %s")
+        params.append(f"%{marca.upper()}%")
+    if modelo:
+        condiciones.append("UPPER(modelo) LIKE %s")
+        params.append(f"%{modelo.upper()}%")
+
+    sql = f"""
+        SELECT DISTINCT marca, modelo, fuente, verificado
+        FROM catalogo_modelos
+        WHERE {' OR '.join(condiciones)}
+        ORDER BY verificado DESC, marca, modelo
+        LIMIT 10
+    """
+
+    resultados = query(sql, tuple(params))
+
+    return jsonify({
+        'sugerencias': resultados,
+        'buscado': {'marca': marca, 'modelo': modelo}
+    })
+
+
 @catalogos_bp.route('/api/catalogos/caracteristicas-web', methods=['GET'])
 @login_required
 def caracteristicas_web():

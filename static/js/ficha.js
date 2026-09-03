@@ -120,7 +120,6 @@ function cargarDatosItem() {
             document.getElementById('paso-datos-manuales').classList.remove('hidden');
             document.getElementById('paso-caracteristicas').classList.remove('hidden');
             document.getElementById('paso-adquisicion').classList.remove('hidden');
-            document.getElementById('paso-checklist').classList.remove('hidden');
             document.getElementById('paso-acciones').classList.remove('hidden');
             document.getElementById('paso-acciones').style.display = 'flex';
 
@@ -141,9 +140,6 @@ function cargarDatosItem() {
             } else {
                 charsContainer.innerHTML = '<p class="text-muted text-sm">Sin características registradas</p>';
             }
-
-            // Generar checklist dinámico basado en las características de la ET
-            generarChecklistDinamico(chars);
 
             // Renderizar características editables
             renderCaracteristicasEditables(chars);
@@ -175,7 +171,6 @@ function actualizarFormatoSerie(tipoBienId) {
                 }
             }
         })
-        .catch(err => console.log('Error actualizando formato serie:', err));
 }
 
 // ============================================================
@@ -369,7 +364,7 @@ function validarSerieAjax() {
 // ============================================================
 
 function generarChecklistDinamico(caracteristicas) {
-    const container = document.getElementById('checklist-caracteristicas');
+    const container = document.getElementById('checklist-caracteristicas-inline');
     if (!container) return;
 
     let html = '';
@@ -419,7 +414,7 @@ function toggleCheck(campo) {
 }
 
 function actualizarChecklist() {
-    const container = document.getElementById('checklist-caracteristicas');
+    const container = document.getElementById('checklist-caracteristicas-inline');
     if (!container) return;
 
     const checkboxes = container.querySelectorAll('input[type="checkbox"]');
@@ -506,13 +501,12 @@ function guardarFicha() {
         alert(seriesVals.length > 1 ? `Se guardaron ${seriesVals.length} borradores de Ficha Técnica` : 'Ficha guardada como borrador');
     })
     .catch(err => {
-        console.error('Error al guardar ficha:', err);
         alert('Error de conexión al guardar');
     });
 }
 
 function recopilarChecklist() {
-    const container = document.getElementById('checklist-caracteristicas');
+    const container = document.getElementById('checklist-caracteristicas-inline');
     if (!container) return {};
 
     const checkboxes = container.querySelectorAll('input[type="checkbox"]');
@@ -645,7 +639,6 @@ function finalizarFicha() {
         }, 1200);
     })
     .catch(err => {
-        console.error('Error al finalizar fichas:', err);
         if (btnFinalizar) {
             btnFinalizar.disabled = false;
             btnFinalizar.textContent = cant > 1 ? `🔒 Finalizar ${cant} Fichas Técnicas` : '🔒 Finalizar Ficha Técnica';
@@ -680,25 +673,66 @@ function previsualizarCarta() {
 }
 
 // ============================================================
-// Búsqueda de Especificaciones (Cache-Aside + Firecrawl Web)
+// Corrección de modelo y búsqueda de especificaciones
 // ============================================================
 
-function buscarEspecificaciones() {
+let webSearchController = null;
+
+function corregirModelo() {
     const marca = (document.getElementById('ft-marca').value || '').trim();
     const modelo = (document.getElementById('ft-modelo').value || '').trim();
 
     if (!marca && !modelo) {
-        alert('Ingrese al menos la marca o el modelo para buscar');
+        alert('Ingrese la marca o el modelo para corregir');
         return;
     }
 
-    const query = encodeURIComponent(`${marca} ${modelo} especificaciones tecnicas datasheet`.trim());
-    window.open(`https://www.google.com/search?q=${query}`, '_blank');
+    const dropdown = document.getElementById('sugerencias-modelo');
+    if (!dropdown) return;
 
-    // Cargar sugerencias desde el catálogo interno (Cache-Aside) en el panel izquierdo
-    verificarPlantillaExistente(true);
-    // Buscar especificaciones en la web con Firecrawl en el panel derecho
-    buscarCaracteristicasWeb();
+    dropdown.innerHTML = '<div class="text-sm p-2">⏳ Buscando...</div>';
+
+    const q = new URLSearchParams({ marca, modelo });
+    fetch(`/api/catalogos/sugerir-modelo?${q.toString()}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.error) {
+                dropdown.innerHTML = '';
+                return;
+            }
+
+            const sugerencias = res.sugerencias || [];
+            if (sugerencias.length === 0) {
+                dropdown.innerHTML = '<div class="text-sm text-muted p-2">Sin sugerencias para "' + marca + ' ' + modelo + '"</div>';
+                return;
+            }
+
+            let html = '';
+            sugerencias.forEach((s) => {
+                const marcaDisplay = (s.marca || '').replace(/"/g, '&quot;');
+                const modeloDisplay = (s.modelo || '').replace(/"/g, '&quot;');
+                const fuenteIcon = s.verificado ? '✅' : '🌐';
+                html += `<div class="sugerencia-item" onclick="seleccionarSugerencia('${marcaDisplay}', '${modeloDisplay}')">
+                    <span class="sugerencia-texto">${fuenteIcon} ${marcaDisplay} ${modeloDisplay}</span>
+                    <span class="sugerencia-badge">${s.verificado ? 'Verificado' : 'Web'}</span>
+                </div>`;
+            });
+            dropdown.innerHTML = html;
+        })
+        .catch(err => {
+            dropdown.innerHTML = '';
+        });
+}
+
+function ocultarSugerenciasModelo() {
+    const dropdown = document.getElementById('sugerencias-modelo');
+    if (dropdown) dropdown.innerHTML = '';
+}
+
+function seleccionarSugerencia(marca, modelo) {
+    document.getElementById('ft-marca').value = marca;
+    document.getElementById('ft-modelo').value = modelo;
+    ocultarSugerenciasModelo();
 }
 
 // ============================================================
@@ -718,10 +752,15 @@ function buscarCaracteristicasWeb() {
         return;
     }
 
-    panel.innerHTML = '<p class="text-sm">⏳ Buscando especificaciones en la web con Firecrawl…</p>';
+    panel.innerHTML = `<div class="loading-indicator">
+        <p class="text-sm">⏳ Buscando especificaciones en la web…</p>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="cancelarBusquedaWeb()">✕ Cancelar</button>
+    </div>`;
+
+    webSearchController = new AbortController();
 
     const q = new URLSearchParams({ marca, modelo });
-    fetch(`/api/catalogos/caracteristicas-web?${q.toString()}`)
+    fetch(`/api/catalogos/caracteristicas-web?${q.toString()}`, { signal: webSearchController.signal })
         .then(r => {
             if (!r.ok) {
                 return r.text().then(t => { throw new Error(`HTTP ${r.status}: ${t || r.statusText}`); });
@@ -736,19 +775,13 @@ function buscarCaracteristicasWeb() {
             const specs = res.caracteristicas || [];
             webSpecsCache = specs;
 
-            const esFirecrawl = res.fuente === 'firecrawl';
-            const badge = esFirecrawl
-                ? '<span class="badge badge-ok">🌐 Firecrawl · web real del fabricante</span>'
-                : '<span class="badge badge-warn">🔍 Búsqueda básica (sin Firecrawl)</span>';
-
             if (specs.length === 0) {
-                panel.innerHTML = `${badge}<p class="text-muted text-sm mt-2">No se encontraron especificaciones en la web para este modelo.</p>` +
-                    (esFirecrawl ? '' :
-                    '<p class="text-sm mt-2">💡 Para obtener las specs reales de <b>cualquier marca/modelo</b> (la web del fabricante usa JavaScript), configura una API key gratuita de Firecrawl en el archivo <code>.env</code> (<code>FIRECRAWL_API_KEY=...</code>) y reinicia el servidor.</p>');
+                panel.innerHTML = `<p class="text-muted text-sm mt-2">No se encontraron especificaciones en la web para este modelo.</p>
+                    ${esFirecrawl ? '' : '<p class="text-sm mt-2">💡 Configura FIRECRAWL_API_KEY en .env para obtener specs reales del fabricante.</p>'}`;
                 return;
             }
 
-            let html = `${badge}<div class="mt-2"></div>`;
+            let html = '';
             html += `<button type="button" class="btn btn-sm btn-success mb-2" onclick="copiarTodasWeb()">➕ Copiar todas al panel izquierdo</button>`;
             html += '<div class="char-web-list">';
             specs.forEach((c, idx) => {
@@ -767,9 +800,19 @@ function buscarCaracteristicasWeb() {
             panel.innerHTML = html;
         })
         .catch(err => {
-            console.error('Error buscando en la web:', err);
+            if (err.name === 'AbortError') {
+                panel.innerHTML = '<p class="text-muted text-sm">Búsqueda cancelada.</p>';
+                return;
+            }
             panel.innerHTML = '<p class="form-error">No se pudo consultar la web. Verifique conexión e inicio de sesión, o revise la consola del servidor.</p>';
         });
+}
+
+function cancelarBusquedaWeb() {
+    if (webSearchController) {
+        webSearchController.abort();
+        webSearchController = null;
+    }
 }
 
 function copiarWeb(idx) {
@@ -802,28 +845,52 @@ function renderCaracteristicasEditables(chars, origenInfo) {
 
     if (!chars || chars.length === 0) {
         container.innerHTML = badgeHtml + `
-            <p class="text-muted text-sm">No hay características asociadas. 
-            Use “➕ Agregar característica” o 🔍 para buscar en Google.</p>`;
+            <p class="text-muted text-sm">No hay características asociadas.
+            Use "➕ Agregar característica" o 🔍 para buscar en la web.</p>`;
         return;
     }
 
-    let html = badgeHtml + '<div class="char-edit-grid">';
-    chars.forEach((c, idx) => {
-        const nombre = c.nombre || '';
-        const valor = c.valor || c.valor_sugerido || '';
-        html += `
-            <div class="char-edit-row" id="char-row-${idx}">
-                <input type="text" class="form-control char-edit-nombre" 
-                       value="${nombre}" placeholder="Nombre (ej: Procesador)">
-                <input type="text" class="form-control char-edit-valor" 
-                       value="${valor}" placeholder="Valor verificado">
-                <button type="button" class="btn btn-sm btn-danger" onclick="quitarCaracteristicaFT(${idx})" title="Quitar">✖</button>
-            </div>`;
-    });
-    html += '</div>';
-    container.innerHTML = html;
-}
+    const isFromWeb = origenInfo && origenInfo.origen === 'WEB';
 
+    if (isFromWeb) {
+        let html = badgeHtml + '<div class="char-edit-grid">';
+        chars.forEach((c, idx) => {
+            const nombre = c.nombre || '';
+            const valor = c.valor || c.valor_sugerido || '';
+            html += `
+                <div class="char-edit-row char-edit-row-web" id="char-row-${idx}">
+                    <div class="char-edit-content">
+                        <span class="char-name-display">${nombre}: ${valor}</span>
+                    </div>
+                    <div class="char-edit-actions">
+                        <button type="button" class="btn btn-sm btn-success" onclick="aprobarCaracteristicaFT(${idx}, '${nombre.replace(/'/g, "\\'")}', '${valor.replace(/'/g, "\\'")}')" title="Aprobar">✓</button>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="quitarCaracteristicaFT(${idx})" title="Eliminar">✖</button>
+                    </div>
+                </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } else {
+        let html = badgeHtml + '<div class="char-edit-grid">';
+        chars.forEach((c, idx) => {
+            const nombre = c.nombre || '';
+            const valor = c.valor || c.valor_sugerido || '';
+            html += `
+                <div class="char-edit-row char-edit-row-et" id="char-row-${idx}">
+                    <input type="text" class="form-control char-edit-nombre"
+                           value="${nombre.replace(/"/g, '&quot;')}" placeholder="Nombre">
+                    <input type="text" class="form-control char-edit-valor"
+                           value="${valor.replace(/"/g, '&quot;')}" placeholder="Valor">
+                    <div class="char-edit-actions">
+                        <button type="button" class="btn btn-sm btn-success" onclick="aprobarCaracteristicaFT(${idx}, '${nombre.replace(/'/g, "\\'")}', '${valor.replace(/'/g, "\\'")}')" title="Aprobar">✓</button>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="quitarCaracteristicaFT(${idx})" title="Eliminar">✖</button>
+                    </div>
+                </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+}
 function agregarCaracteristicaFT() {
     agregarFilaCaracteristica('', '');
 }
@@ -849,7 +916,10 @@ function agregarFilaCaracteristica(nombre = '', valor = '') {
                value="${nombre.replace(/"/g, '&quot;')}" placeholder="Nombre (ej: Procesador)">
         <input type="text" class="form-control char-edit-valor"
                value="${valor.replace(/"/g, '&quot;')}" placeholder="Valor verificado">
-        <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" title="Quitar">✖</button>`;
+        <div class="char-edit-actions">
+            <button type="button" class="btn btn-sm btn-success" onclick="aprobarCaracteristicaFTManual(this)" title="Aprobar">✓</button>
+            <button type="button" class="btn btn-sm btn-danger" onclick="this.closest('.char-edit-row').remove()" title="Quitar">✖</button>
+        </div>`;
     grid.appendChild(row);
     row.querySelector('.char-edit-nombre').focus();
 }
@@ -857,6 +927,42 @@ function agregarFilaCaracteristica(nombre = '', valor = '') {
 function quitarCaracteristicaFT(idx) {
     const row = document.getElementById(`char-row-${idx}`);
     if (row) row.remove();
+}
+
+function aprobarCaracteristicaFT(idx, nombre, valor) {
+    const row = document.getElementById(`char-row-${idx}`);
+    if (row) {
+        row.classList.remove('char-edit-row-web');
+        row.classList.add('char-edit-row-aprobada');
+        const actions = row.querySelector('.char-edit-actions');
+        if (actions) {
+            actions.innerHTML = '<span style="color:green;font-size:0.8rem;">✓ Aprobado</span>';
+        }
+    }
+}
+
+function aprobarCaracteristicaFTManual(btn) {
+    const row = btn.closest('.char-edit-row');
+    if (row) {
+        row.classList.add('char-edit-row-aprobada');
+        const actions = row.querySelector('.char-edit-actions');
+        if (actions) {
+            actions.innerHTML = '<span style="color:green;font-size:0.8rem;">✓ Aprobado</span>';
+        }
+    }
+}
+
+function quitarMarcadas() {
+    const checkboxes = Array.from(document.querySelectorAll('.char-checkbox:checked'));
+    checkboxes.forEach(cb => {
+        const idx = parseInt(cb.id.replace('char-check-', ''));
+        const row = document.getElementById(`char-row-${idx}`);
+        if (row) row.remove();
+    });
+}
+
+function agregarCaracteristicaFT() {
+    agregarFilaCaracteristica('', '');
 }
 
 function recopilarCaracteristicasFT() {
@@ -904,7 +1010,6 @@ function guardarComoPlantilla() {
         alert(`✅ Plantilla guardada para ${marca} ${modelo}.\nSe sugerirá automáticamente en próximas fichas.`);
     })
     .catch(err => {
-        console.error('Error al guardar plantilla:', err);
         alert('Error de conexión al guardar plantilla');
     });
 }
@@ -924,12 +1029,10 @@ function verificarPlantillaExistente(forzarNotificacion = false) {
                     verificado: res.verificado,
                     mensaje: res.mensaje
                 });
-                generarChecklistDinamico(res.caracteristicas);
             } else if (forzarNotificacion) {
                 alert('No se encontraron especificaciones automáticas para este modelo. Puede ingresarlas manualmente o agregarlas.');
             }
         })
-        .catch(err => console.log('Error en Cache-Aside:', err));
 }
 
 

@@ -163,7 +163,8 @@ REGLAS OBLIGATORIAS:
 3. Redacta los valores en español formal, profesional y completo (ej: "Resolución de 4800 x 1200 dpi", "Capacidad de 250 hojas", "Conectividad Wi-Fi Direct y Ethernet").
 4. EXTRAE SOLAMENTE datos que pertenezcan EXPLICITAMENTE al producto "{marca} {modelo}".
 5. NO agregues ni inventes componentes de laptop/computadora (como Procesador Intel, Memoria RAM DDR5, Tarjeta de Video) a menos que el producto sea efectivamente una computadora.
-6. Máximo 10 características principales.
+6. IGNORA cualquier referencia a imágenes, URLs de imágenes o rutas de archivos de imagen.
+7. Máximo 10 características principales.
 
 Ejemplo de estructura esperada:
 [
